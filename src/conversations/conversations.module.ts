@@ -1,0 +1,29 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminModule } from '../admin/admin.module';
+import { Memory } from '../memories/memory.entity';
+import { PersonasModule } from '../personas/personas.module';
+import { ChatRuntimeService } from './chat-runtime.service';
+import { Conversation } from './conversation.entity';
+import { ConversationsController } from './conversations.controller';
+import { ConversationsService } from './conversations.service';
+import { MessageMemoryRef } from './message-memory-ref.entity';
+import { Message } from './message.entity';
+import { VoiceArtifact } from './voice-artifact.entity';
+
+@Module({
+  imports: [
+    TypeOrmModule.forFeature([
+      Conversation,
+      Message,
+      MessageMemoryRef,
+      VoiceArtifact,
+      Memory,
+    ]),
+    PersonasModule,
+    AdminModule,
+  ],
+  controllers: [ConversationsController],
+  providers: [ConversationsService, ChatRuntimeService],
+})
+export class ConversationsModule {}
