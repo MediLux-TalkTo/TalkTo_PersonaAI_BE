@@ -8,6 +8,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
@@ -33,6 +34,7 @@ export class MemoriesController {
     description: '검색어와 필터로 메모리를 조회합니다.',
   })
   @ApiOkResponse({ type: MemoryListResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async list(@Query() query: QueryMemoriesDto) {
     return success(await this.memoriesService.list(query));
   }
@@ -41,6 +43,11 @@ export class MemoriesController {
   @ApiOperation({ summary: '메모리 상세 조회' })
   @ApiParam({ name: 'memoryId', example: 'mem-001' })
   @ApiOkResponse({ type: MemoryResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: false,
+    unauthorized: true,
+    notFound: true,
+  })
   async getById(@Param('memoryId') memoryId: string) {
     return success(await this.memoriesService.getById(memoryId));
   }
@@ -51,6 +58,11 @@ export class MemoriesController {
   @ApiOperation({ summary: '메모리 생성' })
   @ApiBody({ type: CreateMemoryDto })
   @ApiCreatedResponse({ type: MemoryResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    forbidden: true,
+  })
   async create(
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateMemoryDto,
@@ -65,6 +77,12 @@ export class MemoriesController {
   @ApiParam({ name: 'memoryId', example: 'mem-001' })
   @ApiBody({ type: UpdateMemoryDto })
   @ApiOkResponse({ type: MemoryResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    forbidden: true,
+    notFound: true,
+  })
   async update(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,
@@ -79,6 +97,12 @@ export class MemoriesController {
   @ApiOperation({ summary: '메모리 비활성화' })
   @ApiParam({ name: 'memoryId', example: 'mem-001' })
   @ApiOkResponse({ type: MemoryResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: false,
+    unauthorized: true,
+    forbidden: true,
+    notFound: true,
+  })
   async deactivate(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,
@@ -92,6 +116,12 @@ export class MemoriesController {
   @ApiOperation({ summary: '메모리 재임베딩 요청' })
   @ApiParam({ name: 'memoryId', example: 'mem-001' })
   @ApiOkResponse({ type: MemoryResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: false,
+    unauthorized: true,
+    forbidden: true,
+    notFound: true,
+  })
   async reembed(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,

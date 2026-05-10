@@ -6,6 +6,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { success } from '../common/utils/api-response';
@@ -30,6 +31,7 @@ export class AuthController {
   })
   @ApiBody({ type: LoginDto })
   @ApiOkResponse({ type: LoginResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async login(@Body() dto: LoginDto) {
     return success(await this.authService.login(dto));
   }
@@ -41,6 +43,7 @@ export class AuthController {
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiOkResponse({ type: RefreshResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async refresh(@Body() dto: RefreshTokenDto) {
     return success(await this.authService.refresh(dto));
   }
@@ -57,6 +60,7 @@ export class AuthController {
       meta: { timestamp: '2026-05-10T07:15:00.000Z' },
     },
   })
+  @ApiCommonErrorResponses({ badRequest: false, unauthorized: true })
   async logout(@CurrentUser() user: { userId: string }) {
     return success(await this.authService.logout(user.userId));
   }
@@ -69,6 +73,7 @@ export class AuthController {
     description: '프론트에서 세션 복원 시 사용하는 사용자 정보 조회 엔드포인트입니다.',
   })
   @ApiOkResponse({ type: CurrentUserResponseDto })
+  @ApiCommonErrorResponses({ badRequest: false, unauthorized: true })
   async me(@CurrentUser() user: Record<string, unknown>) {
     return success(user);
   }

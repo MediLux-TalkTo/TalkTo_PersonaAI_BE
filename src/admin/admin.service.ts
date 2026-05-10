@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, MoreThanOrEqual, LessThanOrEqual, Repository } from 'typeorm';
 import { FeedbackRating } from '../common/enums/feedback.enum';
+import { sanitizeForLog } from '../common/utils/sanitize.util';
 import { QueryErrorLogsDto } from './dto/query-error-logs.dto';
 import { SystemLog } from './system-log.entity';
 import { User } from '../users/user.entity';
@@ -92,7 +93,7 @@ export class AdminService {
       severity: payload.severity,
       conversationId: payload.conversationId ?? null,
       messageId: payload.messageId ?? null,
-      detail: payload.detail ?? {},
+      detail: sanitizeForLog(payload.detail ?? {}) as Record<string, unknown>,
     });
 
     await this.logsRepository.save(log);

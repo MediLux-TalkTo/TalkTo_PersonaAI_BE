@@ -8,6 +8,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -33,6 +34,11 @@ export class UsersController {
   @Get()
   @ApiOperation({ summary: '사용자 목록 조회' })
   @ApiOkResponse({ type: UserListResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: false,
+    unauthorized: true,
+    forbidden: true,
+  })
   async list() {
     return success(await this.usersService.list());
   }
@@ -41,6 +47,11 @@ export class UsersController {
   @ApiOperation({ summary: '가족 사용자 초대' })
   @ApiBody({ type: InviteUserDto })
   @ApiCreatedResponse({ type: InviteUserResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    forbidden: true,
+  })
   async invite(@Body() dto: InviteUserDto) {
     return success(await this.usersService.invite(dto));
   }
@@ -50,6 +61,12 @@ export class UsersController {
   @ApiParam({ name: 'userId', example: 'user-001' })
   @ApiBody({ type: UpdateUserDto })
   @ApiOkResponse({ type: UserResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    forbidden: true,
+    notFound: true,
+  })
   async update(@Param('userId') userId: string, @Body() dto: UpdateUserDto) {
     return success(await this.usersService.update(userId, dto));
   }

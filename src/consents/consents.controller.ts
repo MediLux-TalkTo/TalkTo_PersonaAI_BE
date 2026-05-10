@@ -7,6 +7,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { success } from '../common/utils/api-response';
@@ -30,6 +31,7 @@ export class ConsentsController {
     description: '프론트의 동의 화면 진입 여부 판단에 사용합니다.',
   })
   @ApiOkResponse({ type: ConsentStatusResponseDto })
+  @ApiCommonErrorResponses({ badRequest: false, unauthorized: true })
   async getMe(@CurrentUser() user: { userId: string }) {
     const consent = await this.consentsService.getLatest(user.userId);
 
@@ -50,6 +52,7 @@ export class ConsentsController {
   })
   @ApiBody({ type: CreateConsentDto })
   @ApiCreatedResponse({ type: ConsentCreateResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async create(@CurrentUser() user: { userId: string }, @Body() dto: CreateConsentDto) {
     const consent = await this.consentsService.save(user.userId, dto);
     return success(consent);

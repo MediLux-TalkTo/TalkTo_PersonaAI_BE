@@ -19,6 +19,7 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { success } from '../common/utils/api-response';
@@ -49,6 +50,7 @@ export class ConversationsController {
   })
   @ApiBody({ type: CreateConversationDto })
   @ApiCreatedResponse({ type: ConversationResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async create(
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateConversationDto,
@@ -62,6 +64,7 @@ export class ConversationsController {
     description: '사용자의 최근 대화 목록을 반환합니다.',
   })
   @ApiOkResponse({ type: ConversationListResponseDto })
+  @ApiCommonErrorResponses({ badRequest: false, unauthorized: true })
   async list(@CurrentUser() user: { userId: string }) {
     return success(await this.conversationsService.listConversations(user.userId));
   }
@@ -73,6 +76,11 @@ export class ConversationsController {
   })
   @ApiParam({ name: 'conversationId', example: 'conv-001' })
   @ApiOkResponse({ type: ConversationDetailResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: false,
+    unauthorized: true,
+    notFound: true,
+  })
   async getDetail(
     @Param('conversationId') conversationId: string,
     @CurrentUser() user: { userId: string; role: Role },
@@ -90,6 +98,11 @@ export class ConversationsController {
   @ApiParam({ name: 'conversationId', example: 'conv-001' })
   @ApiBody({ type: SendTextMessageDto })
   @ApiOkResponse({ type: TextMessageResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    notFound: true,
+  })
   async sendText(
     @Param('conversationId') conversationId: string,
     @CurrentUser() user: { userId: string; role: Role },
@@ -119,6 +132,11 @@ export class ConversationsController {
     },
   })
   @ApiOkResponse({ type: VoiceMessageResponseDto })
+  @ApiCommonErrorResponses({
+    badRequest: true,
+    unauthorized: true,
+    notFound: true,
+  })
   @UseInterceptors(FileInterceptor('audio_file'))
   async sendVoice(
     @Param('conversationId') conversationId: string,
