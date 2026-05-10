@@ -1,0 +1,575 @@
+openapi: 3.0.3
+info:
+  title: TalkTo Persona AI MVP API
+  version: 0.1.0
+  description: Backend MVP API design for Persona AI.
+servers:
+  - url: https://api.example.com
+    description: Production placeholder
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: Auth
+  - name: Consent
+  - name: Persona
+  - name: Conversations
+  - name: Memories
+  - name: Feedback
+  - name: Admin
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Sign in user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Token refreshed
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current user
+      responses:
+        '200':
+          description: Logout success
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      responses:
+        '200':
+          description: Current user profile
+  /api/v1/consents/me:
+    get:
+      tags: [Consent]
+      summary: Get current consent status
+      responses:
+        '200':
+          description: Consent status
+  /api/v1/consents:
+    post:
+      tags: [Consent]
+      summary: Save consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '201':
+          description: Consent saved
+  /api/v1/personas/active:
+    get:
+      tags: [Persona]
+      summary: Get active persona profile
+      responses:
+        '200':
+          description: Active persona
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonaResponse'
+  /api/v1/conversations:
+    post:
+      tags: [Conversations]
+      summary: Create conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        '201':
+          description: Conversation created
+    get:
+      tags: [Conversations]
+      summary: List conversations
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Conversation list
+  /api/v1/conversations/{conversationId}:
+    get:
+      tags: [Conversations]
+      summary: Get conversation detail
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200':
+          description: Conversation detail
+  /api/v1/conversations/{conversationId}/messages/text:
+    post:
+      tags: [Conversations]
+      summary: Send text message
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextMessageRequest'
+      responses:
+        '200':
+          description: Assistant response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextMessageResponse'
+  /api/v1/conversations/{conversationId}/messages/voice:
+    post:
+      tags: [Conversations]
+      summary: Send voice message
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio_file]
+              properties:
+                audio_file:
+                  type: string
+                  format: binary
+                persona_id:
+                  type: string
+      responses:
+        '200':
+          description: Voice response
+  /api/v1/memories:
+    get:
+      tags: [Memories]
+      summary: List memories
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+        - in: query
+          name: person
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+      responses:
+        '200':
+          description: Memory list
+    post:
+      tags: [Memories]
+      summary: Create memory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryWriteRequest'
+      responses:
+        '201':
+          description: Memory created
+  /api/v1/memories/{memoryId}:
+    get:
+      tags: [Memories]
+      summary: Get memory detail
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      responses:
+        '200':
+          description: Memory detail
+    patch:
+      tags: [Memories]
+      summary: Update memory
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryWriteRequest'
+      responses:
+        '200':
+          description: Memory updated
+  /api/v1/memories/{memoryId}/deactivate:
+    post:
+      tags: [Memories]
+      summary: Deactivate memory
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      responses:
+        '200':
+          description: Memory deactivated
+  /api/v1/memories/{memoryId}/reembed:
+    post:
+      tags: [Memories]
+      summary: Request memory re-embedding
+      parameters:
+        - $ref: '#/components/parameters/MemoryId'
+      responses:
+        '202':
+          description: Re-embedding requested
+  /api/v1/messages/{messageId}/feedback:
+    post:
+      tags: [Feedback]
+      summary: Submit response feedback
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackRequest'
+      responses:
+        '201':
+          description: Feedback submitted
+  /api/v1/admin/users:
+    get:
+      tags: [Admin]
+      summary: List users
+      responses:
+        '200':
+          description: User list
+  /api/v1/admin/users/invitations:
+    post:
+      tags: [Admin]
+      summary: Invite family user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone_number:
+                  type: string
+      responses:
+        '201':
+          description: Invitation created
+  /api/v1/admin/users/{userId}:
+    patch:
+      tags: [Admin]
+      summary: Update user role or status
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [FAMILY, ADMIN]
+                status:
+                  type: string
+                  enum: [INVITED, ACTIVE, DISABLED]
+      responses:
+        '200':
+          description: User updated
+  /api/v1/admin/personas/{personaId}:
+    patch:
+      tags: [Admin]
+      summary: Update persona metadata
+      parameters:
+        - $ref: '#/components/parameters/PersonaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                description:
+                  type: string
+                voice_id:
+                  type: string
+                model_id:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Persona updated
+  /api/v1/admin/feedback:
+    get:
+      tags: [Admin]
+      summary: List feedback
+      responses:
+        '200':
+          description: Feedback list
+  /api/v1/admin/metrics/overview:
+    get:
+      tags: [Admin]
+      summary: Get metrics overview
+      responses:
+        '200':
+          description: Metrics overview
+  /api/v1/admin/logs/errors:
+    get:
+      tags: [Admin]
+      summary: Get error logs
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [LLM, STT, TTS, AUTH, MEMORY, SYSTEM]
+        - in: query
+          name: severity
+          schema:
+            type: string
+            enum: [INFO, WARN, ERROR]
+      responses:
+        '200':
+          description: Error logs
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ConversationId:
+      in: path
+      name: conversationId
+      required: true
+      schema:
+        type: string
+    MemoryId:
+      in: path
+      name: memoryId
+      required: true
+      schema:
+        type: string
+    MessageId:
+      in: path
+      name: messageId
+      required: true
+      schema:
+        type: string
+    UserId:
+      in: path
+      name: userId
+      required: true
+      schema:
+        type: string
+    PersonaId:
+      in: path
+      name: personaId
+      required: true
+      schema:
+        type: string
+  schemas:
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_in:
+              type: integer
+            user:
+              $ref: '#/components/schemas/UserSummary'
+    UserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [FAMILY, ADMIN]
+        consent_required:
+          type: boolean
+    ConsentRequest:
+      type: object
+      required:
+        - persona_disclaimer_accepted
+        - conversation_storage_accepted
+        - voice_synthesis_accepted
+      properties:
+        persona_disclaimer_accepted:
+          type: boolean
+        conversation_storage_accepted:
+          type: boolean
+        voice_synthesis_accepted:
+          type: boolean
+    PersonaResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            display_name:
+              type: string
+            description:
+              type: string
+            profile_image_url:
+              type: string
+              nullable: true
+            voice_enabled:
+              type: boolean
+    CreateConversationRequest:
+      type: object
+      required: [persona_id, channel]
+      properties:
+        persona_id:
+          type: string
+        channel:
+          type: string
+          enum: [TEXT, VOICE]
+    TextMessageRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+    TextMessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user_message:
+              $ref: '#/components/schemas/MessageSummary'
+            assistant_message:
+              allOf:
+                - $ref: '#/components/schemas/MessageSummary'
+                - type: object
+                  properties:
+                    retrieved_memory_ids:
+                      type: array
+                      items:
+                        type: string
+                    latency_ms:
+                      type: integer
+    MessageSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        input_mode:
+          type: string
+          enum: [TEXT, VOICE]
+    MemoryWriteRequest:
+      type: object
+      required: [title, memory_type, body_markdown]
+      properties:
+        title:
+          type: string
+        memory_type:
+          type: string
+        related_people:
+          type: array
+          items:
+            type: string
+        related_period:
+          type: string
+          nullable: true
+        body_markdown:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        confidence_score:
+          type: number
+          format: float
+    FeedbackRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: string
+          enum: [UP, DOWN]
+        tags:
+          type: array
+          items:
+            type: string
+        comment:
+          type: string
