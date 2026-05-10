@@ -6,6 +6,7 @@ import { AdminModule } from './admin/admin.module';
 import { BootstrapService } from './bootstrap/bootstrap.service';
 import { ConsentsModule } from './consents/consents.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { HealthModule } from './health/health.module';
 import { PersonasModule } from './personas/personas.module';
 import { UsersModule } from './users/users.module';
 import { MemoriesModule } from './memories/memories.module';
@@ -29,6 +30,7 @@ import { Persona } from './personas/persona.entity';
     ConsentsModule,
     ConversationsModule,
     FeedbackModule,
+    HealthModule,
     MemoriesModule,
     PersonasModule,
     UsersModule,

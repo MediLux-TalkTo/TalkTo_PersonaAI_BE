@@ -16,6 +16,7 @@ npm run start:dev
 ```
 
 Swagger is exposed at [http://localhost:3000/docs](http://localhost:3000/docs).
+Health check is exposed at [http://localhost:3000/api/v1/health](http://localhost:3000/api/v1/health).
 
 ## Default local admin
 
