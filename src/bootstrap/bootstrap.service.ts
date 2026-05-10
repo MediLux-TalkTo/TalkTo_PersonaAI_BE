@@ -1,4 +1,5 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Role } from '../common/enums/role.enum';
@@ -10,6 +11,7 @@ import { User } from '../users/user.entity';
 @Injectable()
 export class BootstrapService implements OnApplicationBootstrap {
   constructor(
+    private readonly configService: ConfigService,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
     @InjectRepository(Persona)
@@ -17,12 +19,27 @@ export class BootstrapService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
+    if (!this.shouldSeedDefaultData()) {
+      return;
+    }
+
     await this.ensureAdminUser();
     await this.ensureDefaultPersona();
   }
 
+  private shouldSeedDefaultData() {
+    const shouldSeed = this.configService.get<boolean>('BOOTSTRAP_SEED');
+
+    if (typeof shouldSeed === 'boolean') {
+      return shouldSeed;
+    }
+
+    return this.configService.get<string>('NODE_ENV') !== 'production';
+  }
+
   private async ensureAdminUser() {
-    const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@talkto.local';
+    const adminEmail =
+      this.configService.get<string>('ADMIN_EMAIL') ?? 'admin@talkto.local';
     const existingAdmin = await this.usersRepository.findOne({
       where: { email: adminEmail },
     });
@@ -32,10 +49,12 @@ export class BootstrapService implements OnApplicationBootstrap {
     }
 
     const admin = this.usersRepository.create({
-      name: process.env.ADMIN_NAME ?? 'Local Admin',
+      name: this.configService.get<string>('ADMIN_NAME') ?? 'Local Admin',
       email: adminEmail,
       phoneNumber: null,
-      passwordHash: await hashValue(process.env.ADMIN_PASSWORD ?? 'Admin1234!'),
+      passwordHash: await hashValue(
+        this.configService.get<string>('ADMIN_PASSWORD') ?? 'Admin1234!',
+      ),
       role: Role.ADMIN,
       status: UserStatus.ACTIVE,
     });
