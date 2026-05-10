@@ -1,5 +1,13 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
@@ -7,6 +15,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { success } from '../common/utils/api-response';
 import { CreateMemoryDto } from './dto/create-memory.dto';
+import { MemoryListResponseDto, MemoryResponseDto } from './dto/memory-response.dto';
 import { QueryMemoriesDto } from './dto/query-memories.dto';
 import { UpdateMemoryDto } from './dto/update-memory.dto';
 import { MemoriesService } from './memories.service';
@@ -19,11 +28,19 @@ export class MemoriesController {
   constructor(private readonly memoriesService: MemoriesService) {}
 
   @Get()
+  @ApiOperation({
+    summary: '메모리 목록 조회',
+    description: '검색어와 필터로 메모리를 조회합니다.',
+  })
+  @ApiOkResponse({ type: MemoryListResponseDto })
   async list(@Query() query: QueryMemoriesDto) {
     return success(await this.memoriesService.list(query));
   }
 
   @Get(':memoryId')
+  @ApiOperation({ summary: '메모리 상세 조회' })
+  @ApiParam({ name: 'memoryId', example: 'mem-001' })
+  @ApiOkResponse({ type: MemoryResponseDto })
   async getById(@Param('memoryId') memoryId: string) {
     return success(await this.memoriesService.getById(memoryId));
   }
@@ -31,6 +48,9 @@ export class MemoriesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post()
+  @ApiOperation({ summary: '메모리 생성' })
+  @ApiBody({ type: CreateMemoryDto })
+  @ApiCreatedResponse({ type: MemoryResponseDto })
   async create(
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateMemoryDto,
@@ -41,6 +61,10 @@ export class MemoriesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Patch(':memoryId')
+  @ApiOperation({ summary: '메모리 수정' })
+  @ApiParam({ name: 'memoryId', example: 'mem-001' })
+  @ApiBody({ type: UpdateMemoryDto })
+  @ApiOkResponse({ type: MemoryResponseDto })
   async update(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,
@@ -52,6 +76,9 @@ export class MemoriesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post(':memoryId/deactivate')
+  @ApiOperation({ summary: '메모리 비활성화' })
+  @ApiParam({ name: 'memoryId', example: 'mem-001' })
+  @ApiOkResponse({ type: MemoryResponseDto })
   async deactivate(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,
@@ -62,6 +89,9 @@ export class MemoriesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post(':memoryId/reembed')
+  @ApiOperation({ summary: '메모리 재임베딩 요청' })
+  @ApiParam({ name: 'memoryId', example: 'mem-001' })
+  @ApiOkResponse({ type: MemoryResponseDto })
   async reembed(
     @CurrentUser() user: { userId: string },
     @Param('memoryId') memoryId: string,
