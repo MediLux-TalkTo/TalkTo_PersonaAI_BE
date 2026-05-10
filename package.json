@@ -13,7 +13,12 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage"
+    "test:cov": "jest --coverage",
+    "typeorm": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/database/data-source.ts",
+    "migration:create": "npm run typeorm -- migration:create src/database/migrations/ManualMigration",
+    "migration:generate": "npm run typeorm -- migration:generate src/database/migrations/GeneratedMigration",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert"
   },
   "repository": {
     "type": "git",
@@ -31,6 +36,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.19",
     "@nestjs/swagger": "^11.4.2",
+    "@nestjs/throttler": "^6.4.0",
     "@nestjs/typeorm": "^11.0.1",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",

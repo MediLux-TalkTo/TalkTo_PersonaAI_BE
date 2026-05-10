@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
@@ -21,6 +23,12 @@ import { Persona } from './personas/persona.entity';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.THROTTLE_TTL ?? 60000),
+        limit: Number(process.env.THROTTLE_LIMIT ?? 60),
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       useFactory: buildTypeOrmOptions,
     }),
@@ -35,6 +43,12 @@ import { Persona } from './personas/persona.entity';
     PersonasModule,
     UsersModule,
   ],
-  providers: [BootstrapService],
+  providers: [
+    BootstrapService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
