@@ -19,7 +19,7 @@ export class Persona {
   @Column({ type: 'text' })
   description: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   profileImageUrl: string | null;
 
   @Column({ default: 'default-voice' })

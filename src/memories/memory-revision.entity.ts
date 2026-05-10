@@ -29,10 +29,10 @@ export class MemoryRevision {
   @Column({ type: 'jsonb', nullable: true })
   afterSnapshot: Record<string, unknown> | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   actorUserId: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   reason: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })

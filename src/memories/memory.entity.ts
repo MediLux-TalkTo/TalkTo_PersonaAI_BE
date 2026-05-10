@@ -25,7 +25,7 @@ export class Memory {
   @Column({ type: 'text', array: true, default: '{}' })
   relatedPeople: string[];
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   relatedPeriod: string | null;
 
   @Column({ type: 'text' })
@@ -44,10 +44,10 @@ export class Memory {
   })
   status: MemoryStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   createdBy: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   updatedBy: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })

@@ -28,7 +28,7 @@ export class Conversation {
   })
   channel: ConversationChannel;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   title: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })

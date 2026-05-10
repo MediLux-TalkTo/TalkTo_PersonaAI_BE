@@ -27,10 +27,10 @@ export class SystemLog {
   })
   severity: SystemLogSeverity;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   conversationId: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   messageId: string | null;
 
   @Column({ type: 'jsonb', default: {} })

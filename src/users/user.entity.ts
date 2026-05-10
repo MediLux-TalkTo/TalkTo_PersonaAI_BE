@@ -21,10 +21,10 @@ export class User {
   @Column({ length: 100 })
   name: string;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   email: string | null;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   phoneNumber: string | null;
 
   @Column()
@@ -44,7 +44,7 @@ export class User {
   })
   status: UserStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   refreshTokenHash: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })

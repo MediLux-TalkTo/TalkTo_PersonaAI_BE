@@ -15,13 +15,13 @@ export class VoiceArtifact {
   @Column()
   messageId: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   audioInputUrl: string | null;
 
   @Column({ type: 'text', nullable: true })
   sttText: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   ttsAudioUrl: string | null;
 
   @Column({ default: 'COMPLETED' })

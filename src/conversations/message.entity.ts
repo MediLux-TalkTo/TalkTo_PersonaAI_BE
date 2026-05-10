@@ -53,7 +53,7 @@ export class Message {
   })
   status: MessageStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   failureReason: string | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
