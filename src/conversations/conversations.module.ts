@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminModule } from '../admin/admin.module';
+import { AiModule } from '../ai/ai.module';
+import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { PersonasModule } from '../personas/personas.module';
 import { ChatRuntimeService } from './chat-runtime.service';
@@ -19,7 +21,9 @@ import { VoiceArtifact } from './voice-artifact.entity';
       MessageMemoryRef,
       VoiceArtifact,
       Memory,
+      MemoryEmbedding,
     ]),
+    AiModule,
     PersonasModule,
     AdminModule,
   ],

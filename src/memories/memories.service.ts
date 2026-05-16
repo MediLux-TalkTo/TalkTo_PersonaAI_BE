@@ -1,6 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
+import { AdminService } from '../admin/admin.service';
+import { AiClientService } from '../ai/ai-client.service';
+import {
+  SystemLogCategory,
+  SystemLogSeverity,
+} from '../common/enums/log.enum';
 import { MemoryRevisionAction, MemoryStatus } from '../common/enums/memory.enums';
 import { CreateMemoryDto } from './dto/create-memory.dto';
 import { QueryMemoriesDto } from './dto/query-memories.dto';
@@ -18,6 +24,8 @@ export class MemoriesService {
     private readonly revisionsRepository: Repository<MemoryRevision>,
     @InjectRepository(MemoryEmbedding)
     private readonly embeddingsRepository: Repository<MemoryEmbedding>,
+    private readonly aiClientService: AiClientService,
+    private readonly adminService: AdminService,
   ) {}
 
   async list(query: QueryMemoriesDto): Promise<Memory[]> {
@@ -147,14 +155,35 @@ export class MemoriesService {
       return;
     }
 
-    const embeddings = chunks.map((chunkText, chunkIndex) =>
-      this.embeddingsRepository.create({
-        memoryId: memory.id,
-        chunkIndex,
-        chunkText,
-        embedding: null,
-      }),
-    );
+    const embeddings: MemoryEmbedding[] = [];
+
+    for (const [chunkIndex, chunkText] of chunks.entries()) {
+      let embedding: number[] | null = null;
+
+      try {
+        embedding = await this.aiClientService.embed(chunkText);
+      } catch (error) {
+        await this.adminService.recordLog({
+          category: SystemLogCategory.MEMORY,
+          severity: SystemLogSeverity.ERROR,
+          detail: {
+            reason: 'memory_embedding_failed',
+            memoryId: memory.id,
+            chunkIndex,
+            error: error instanceof Error ? error.message : 'unknown',
+          },
+        });
+      }
+
+      embeddings.push(
+        this.embeddingsRepository.create({
+          memoryId: memory.id,
+          chunkIndex,
+          chunkText,
+          embedding,
+        }),
+      );
+    }
 
     await this.embeddingsRepository.save(embeddings);
   }

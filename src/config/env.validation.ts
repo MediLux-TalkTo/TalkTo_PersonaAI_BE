@@ -23,6 +23,8 @@ export interface RuntimeEnv {
   JWT_REFRESH_SECRET: string;
   JWT_ACCESS_EXPIRES_IN: string;
   JWT_REFRESH_EXPIRES_IN: string;
+  AI_SERVER_URL?: string;
+  AI_SERVER_TIMEOUT_MS: number;
   ADMIN_NAME: string;
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
@@ -83,6 +85,14 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       'JWT_REFRESH_EXPIRES_IN',
       '7d',
       errors,
+    ),
+    AI_SERVER_URL: readOptionalString(config, 'AI_SERVER_URL'),
+    AI_SERVER_TIMEOUT_MS: readNumber(
+      config,
+      'AI_SERVER_TIMEOUT_MS',
+      10000,
+      errors,
+      { min: 1000 },
     ),
     ADMIN_NAME: readString(config, 'ADMIN_NAME', 'Local Admin', errors),
     ADMIN_EMAIL: readString(config, 'ADMIN_EMAIL', 'admin@talkto.local', errors),

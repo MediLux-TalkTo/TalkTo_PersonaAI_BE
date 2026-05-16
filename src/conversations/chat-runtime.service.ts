@@ -1,10 +1,62 @@
 import { Injectable } from '@nestjs/common';
+import {
+  AiChatHistoryItem,
+  AiClientService,
+} from '../ai/ai-client.service';
 import { Memory } from '../memories/memory.entity';
 import { Persona } from '../personas/persona.entity';
 
+export interface AssistantReplyResult {
+  content: string;
+  retrievedMemoryIds: string[];
+  latencyMs: number;
+  usedFallback: boolean;
+}
+
 @Injectable()
 export class ChatRuntimeService {
-  buildAssistantReply(params: {
+  constructor(private readonly aiClientService: AiClientService) {}
+
+  async generateAssistantReply(params: {
+    persona: Persona;
+    userMessage: string;
+    memories: Memory[];
+    history: AiChatHistoryItem[];
+  }): Promise<AssistantReplyResult> {
+    const startedAt = Date.now();
+    const aiResponse = await this.aiClientService.chat({
+      message: params.userMessage,
+      history: params.history,
+      memories: params.memories.map((memory) => ({
+        id: memory.id,
+        title: memory.title,
+        content: memory.bodyMarkdown,
+      })),
+    });
+
+    if (!aiResponse) {
+      return {
+        content: this.buildFallbackAssistantReply(params),
+        retrievedMemoryIds: params.memories.map((memory) => memory.id),
+        latencyMs: Date.now() - startedAt,
+        usedFallback: true,
+      };
+    }
+
+    const allowedMemoryIds = new Set(params.memories.map((memory) => memory.id));
+    const retrievedMemoryIds = (aiResponse.retrieved_memory_ids ?? []).filter((id) =>
+      allowedMemoryIds.has(id),
+    );
+
+    return {
+      content: aiResponse.content,
+      retrievedMemoryIds,
+      latencyMs: aiResponse.latency_ms ?? Date.now() - startedAt,
+      usedFallback: false,
+    };
+  }
+
+  buildFallbackAssistantReply(params: {
     persona: Persona;
     userMessage: string;
     memories: Memory[];

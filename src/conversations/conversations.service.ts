@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, ILike, Repository } from 'typeorm';
+import { AiChatHistoryItem, AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
 import {
   SystemLogCategory,
@@ -16,6 +17,7 @@ import {
   MessageStatus,
 } from '../common/enums/message.enums';
 import { MemoryStatus } from '../common/enums/memory.enums';
+import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { PersonasService } from '../personas/personas.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
@@ -34,6 +36,7 @@ export class ConversationsService {
     private readonly dataSource: DataSource,
     private readonly personasService: PersonasService,
     private readonly chatRuntimeService: ChatRuntimeService,
+    private readonly aiClientService: AiClientService,
     private readonly adminService: AdminService,
     @InjectRepository(Conversation)
     private readonly conversationsRepository: Repository<Conversation>,
@@ -45,6 +48,8 @@ export class ConversationsService {
     private readonly voiceArtifactsRepository: Repository<VoiceArtifact>,
     @InjectRepository(Memory)
     private readonly memoriesRepository: Repository<Memory>,
+    @InjectRepository(MemoryEmbedding)
+    private readonly memoryEmbeddingsRepository: Repository<MemoryEmbedding>,
   ) {}
 
   async createConversation(userId: string, dto: CreateConversationDto) {
@@ -100,14 +105,15 @@ export class ConversationsService {
   ) {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const persona = await this.personasService.getActivePersona();
-    const startedAt = Date.now();
+    const history = await this.getConversationHistory(conversation.id);
     const relatedMemories = await this.retrieveMemories(dto.content);
-    const assistantReply = this.chatRuntimeService.buildAssistantReply({
+    const assistantReply = await this.generateAssistantReply({
+      conversationId,
       persona,
       userMessage: dto.content,
       memories: relatedMemories,
+      history,
     });
-    const latencyMs = Date.now() - startedAt;
 
     return this.dataSource.transaction(async (manager) => {
       const userMessage = manager.create(Message, {
@@ -124,20 +130,20 @@ export class ConversationsService {
       const assistantMessage = manager.create(Message, {
         conversationId: conversation.id,
         senderType: MessageSenderType.ASSISTANT,
-        content: assistantReply,
+        content: assistantReply.content,
         inputMode: MessageInputMode.TEXT,
         status: MessageStatus.COMPLETED,
-        latencyMs,
-        retrievedMemoryIds: relatedMemories.map((memory) => memory.id),
+        latencyMs: assistantReply.latencyMs,
+        retrievedMemoryIds: assistantReply.retrievedMemoryIds,
       });
 
       const savedAssistantMessage = await manager.save(assistantMessage);
 
-      if (relatedMemories.length > 0) {
-        const refs = relatedMemories.map((memory) =>
+      if (assistantReply.retrievedMemoryIds.length > 0) {
+        const refs = assistantReply.retrievedMemoryIds.map((memoryId) =>
           manager.create(MessageMemoryRef, {
             messageId: savedAssistantMessage.id,
-            memoryId: memory.id,
+            memoryId,
           }),
         );
         await manager.save(refs);
@@ -166,14 +172,15 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const persona = await this.personasService.getActivePersona();
     const sttText = dto.sttText?.trim() || '음성 메시지가 전송되었습니다.';
-    const startedAt = Date.now();
+    const history = await this.getConversationHistory(conversation.id);
     const relatedMemories = await this.retrieveMemories(sttText);
-    const assistantReply = this.chatRuntimeService.buildAssistantReply({
+    const assistantReply = await this.generateAssistantReply({
+      conversationId,
       persona,
       userMessage: sttText,
       memories: relatedMemories,
+      history,
     });
-    const latencyMs = Date.now() - startedAt;
 
     try {
       return await this.dataSource.transaction(async (manager) => {
@@ -190,11 +197,11 @@ export class ConversationsService {
         const assistantMessage = manager.create(Message, {
           conversationId: conversation.id,
           senderType: MessageSenderType.ASSISTANT,
-          content: assistantReply,
+          content: assistantReply.content,
           inputMode: MessageInputMode.VOICE,
           status: MessageStatus.COMPLETED,
-          latencyMs,
-          retrievedMemoryIds: relatedMemories.map((memory) => memory.id),
+          latencyMs: assistantReply.latencyMs,
+          retrievedMemoryIds: assistantReply.retrievedMemoryIds,
         });
         const savedAssistantMessage = await manager.save(assistantMessage);
 
@@ -209,11 +216,11 @@ export class ConversationsService {
         });
         const savedVoiceArtifact = await manager.save(voiceArtifact);
 
-        if (relatedMemories.length > 0) {
-          const refs = relatedMemories.map((memory) =>
+        if (assistantReply.retrievedMemoryIds.length > 0) {
+          const refs = assistantReply.retrievedMemoryIds.map((memoryId) =>
             manager.create(MessageMemoryRef, {
               messageId: savedAssistantMessage.id,
-              memoryId: memory.id,
+              memoryId,
             }),
           );
           await manager.save(refs);
@@ -278,13 +285,159 @@ export class ConversationsService {
       });
     }
 
+    const vectorMatches = await this.retrieveMemoriesByVector(trimmed);
+
+    if (vectorMatches.length > 0) {
+      return vectorMatches;
+    }
+
+    return this.retrieveMemoriesByKeyword(trimmed);
+  }
+
+  private async retrieveMemoriesByKeyword(query: string): Promise<Memory[]> {
     return this.memoriesRepository.find({
       where: [
-        { status: MemoryStatus.ACTIVE, title: ILike(`%${trimmed}%`) },
-        { status: MemoryStatus.ACTIVE, bodyMarkdown: ILike(`%${trimmed}%`) },
+        { status: MemoryStatus.ACTIVE, title: ILike(`%${query}%`) },
+        { status: MemoryStatus.ACTIVE, bodyMarkdown: ILike(`%${query}%`) },
       ],
       take: 3,
       order: { updatedAt: 'DESC' },
     });
+  }
+
+  private async retrieveMemoriesByVector(query: string): Promise<Memory[]> {
+    let queryEmbedding: number[] | null = null;
+
+    try {
+      queryEmbedding = await this.aiClientService.embed(query);
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.MEMORY,
+        severity: SystemLogSeverity.WARN,
+        detail: {
+          reason: 'query_embedding_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+    }
+
+    if (!queryEmbedding) {
+      return [];
+    }
+
+    const embeddings = await this.memoryEmbeddingsRepository.find({
+      where: {
+        memory: {
+          status: MemoryStatus.ACTIVE,
+        },
+      },
+      relations: ['memory'],
+    });
+    const scores = new Map<string, { memory: Memory; score: number }>();
+
+    for (const embedding of embeddings) {
+      if (!embedding.embedding) {
+        continue;
+      }
+
+      const score = this.cosineSimilarity(queryEmbedding, embedding.embedding);
+      const current = scores.get(embedding.memoryId);
+
+      if (!current || score > current.score) {
+        scores.set(embedding.memoryId, {
+          memory: embedding.memory,
+          score,
+        });
+      }
+    }
+
+    return Array.from(scores.values())
+      .filter(({ score }) => score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 3)
+      .map(({ memory }) => memory);
+  }
+
+  private async getConversationHistory(
+    conversationId: string,
+  ): Promise<AiChatHistoryItem[]> {
+    const messages = await this.messagesRepository.find({
+      where: { conversationId },
+      order: { createdAt: 'DESC' },
+      take: 20,
+    });
+
+    return messages
+      .reverse()
+      .filter(
+        (message) =>
+          message.senderType === MessageSenderType.USER ||
+          message.senderType === MessageSenderType.ASSISTANT,
+      )
+      .map((message) => ({
+        role:
+          message.senderType === MessageSenderType.USER
+            ? ('user' as const)
+            : ('assistant' as const),
+        content: message.content,
+      }));
+  }
+
+  private async generateAssistantReply(params: {
+    conversationId: string;
+    persona: Awaited<ReturnType<PersonasService['getActivePersona']>>;
+    userMessage: string;
+    memories: Memory[];
+    history: AiChatHistoryItem[];
+  }) {
+    try {
+      return await this.chatRuntimeService.generateAssistantReply({
+        persona: params.persona,
+        userMessage: params.userMessage,
+        memories: params.memories,
+        history: params.history,
+      });
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.LLM,
+        severity: SystemLogSeverity.ERROR,
+        conversationId: params.conversationId,
+        detail: {
+          reason: 'ai_chat_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+
+      return {
+        content: this.chatRuntimeService.buildFallbackAssistantReply({
+          persona: params.persona,
+          userMessage: params.userMessage,
+          memories: params.memories,
+        }),
+        retrievedMemoryIds: params.memories.map((memory) => memory.id),
+        latencyMs: 0,
+        usedFallback: true,
+      };
+    }
+  }
+
+  private cosineSimilarity(left: number[], right: number[]): number {
+    if (left.length !== right.length || left.length === 0) {
+      return 0;
+    }
+
+    let dotProduct = 0;
+    let leftMagnitude = 0;
+    let rightMagnitude = 0;
+
+    for (let index = 0; index < left.length; index += 1) {
+      dotProduct += left[index] * right[index];
+      leftMagnitude += left[index] ** 2;
+      rightMagnitude += right[index] ** 2;
+    }
+
+    const denominator = Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude);
+
+    return denominator === 0 ? 0 : dotProduct / denominator;
   }
 }
