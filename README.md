@@ -60,3 +60,18 @@ npm run migration:revert
 ```
 
 If you switch to migration-based schema control, set `DB_SYNCHRONIZE=false`.
+
+## Memory import
+
+Long-term memory import data is owned by the AI repository:
+
+- `MediLux-TalkTo/TalkTo_PersonaAI_AI:data/backend_memory_import.json`
+
+The backend imports that source through the GitHub Contents API and does not keep
+a copied data file in this repository.
+
+```bash
+ADMIN_PASSWORD=... GITHUB_TOKEN=... npm run import:memories
+```
+
+Use `IMPORT_DRY_RUN=true` to validate the source without writing to the backend.
