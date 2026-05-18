@@ -19,6 +19,7 @@ import {
 import { MemoryStatus } from '../common/enums/memory.enums';
 import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
+import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendTextMessageDto } from './dto/send-text-message.dto';
@@ -37,6 +38,7 @@ export class ConversationsService {
     private readonly personasService: PersonasService,
     private readonly chatRuntimeService: ChatRuntimeService,
     private readonly aiClientService: AiClientService,
+    private readonly memoriesService: MemoriesService,
     private readonly adminService: AdminService,
     @InjectRepository(Conversation)
     private readonly conversationsRepository: Repository<Conversation>,
@@ -115,7 +117,7 @@ export class ConversationsService {
       history,
     });
 
-    return this.dataSource.transaction(async (manager) => {
+    const exchange = await this.dataSource.transaction(async (manager) => {
       const userMessage = manager.create(Message, {
         conversationId: conversation.id,
         senderType: MessageSenderType.USER,
@@ -157,6 +159,16 @@ export class ConversationsService {
         assistantMessage: savedAssistantMessage,
       };
     });
+
+    await this.extractShortTermMemory({
+      userId: actor.userId,
+      conversationId,
+      history,
+      userMessage: dto.content,
+      assistantMessage: assistantReply.content,
+    });
+
+    return exchange;
   }
 
   async sendVoiceMessage(
@@ -171,7 +183,7 @@ export class ConversationsService {
 
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const persona = await this.personasService.getActivePersona();
-    const sttText = dto.sttText?.trim() || '음성 메시지가 전송되었습니다.';
+    const sttText = await this.resolveSttText(conversationId, dto, file);
     const history = await this.getConversationHistory(conversation.id);
     const relatedMemories = await this.retrieveMemories(sttText);
     const assistantReply = await this.generateAssistantReply({
@@ -183,7 +195,7 @@ export class ConversationsService {
     });
 
     try {
-      return await this.dataSource.transaction(async (manager) => {
+      const exchange = await this.dataSource.transaction(async (manager) => {
         const userMessage = manager.create(Message, {
           conversationId: conversation.id,
           senderType: MessageSenderType.USER,
@@ -209,10 +221,10 @@ export class ConversationsService {
           messageId: savedUserMessage.id,
           audioInputUrl: `/uploads/${Date.now()}-${file.originalname}`,
           sttText,
-          ttsAudioUrl: `/audio/assistant-${savedAssistantMessage.id}.mp3`,
+          ttsAudioUrl: null,
           sttStatus: 'COMPLETED',
-          ttsStatus: 'COMPLETED',
-          fallbackTextUsed: false,
+          ttsStatus: 'PENDING',
+          fallbackTextUsed: true,
         });
         const savedVoiceArtifact = await manager.save(voiceArtifact);
 
@@ -241,6 +253,16 @@ export class ConversationsService {
           },
         };
       });
+
+      await this.extractShortTermMemory({
+        userId: actor.userId,
+        conversationId,
+        history,
+        userMessage: sttText,
+        assistantMessage: assistantReply.content,
+      });
+
+      return exchange;
     } catch (error) {
       await this.adminService.recordLog({
         category: SystemLogCategory.STT,
@@ -253,6 +275,31 @@ export class ConversationsService {
       });
       throw error;
     }
+  }
+
+  private async resolveSttText(
+    conversationId: string,
+    dto: SendVoiceMessageDto,
+    file: Express.Multer.File,
+  ): Promise<string> {
+    try {
+      const aiSttText = await this.aiClientService.transcribe(file);
+      if (aiSttText?.trim()) {
+        return aiSttText.trim();
+      }
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.STT,
+        severity: SystemLogSeverity.WARN,
+        conversationId,
+        detail: {
+          reason: 'ai_stt_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+    }
+
+    return dto.sttText?.trim() || '음성 메시지가 전송되었습니다.';
   }
 
   private async assertConversationOwnership(
@@ -418,6 +465,52 @@ export class ConversationsService {
         latencyMs: 0,
         usedFallback: true,
       };
+    }
+  }
+
+  private async extractShortTermMemory(params: {
+    userId: string;
+    conversationId: string;
+    history: AiChatHistoryItem[];
+    userMessage: string;
+    assistantMessage: string;
+  }): Promise<void> {
+    try {
+      const extraction = await this.aiClientService.extractMemory({
+        history: params.history,
+        user_message: params.userMessage,
+        assistant_message: params.assistantMessage,
+      });
+
+      if (!extraction?.saved || !extraction.summary) {
+        return;
+      }
+
+      await this.memoriesService.create(params.userId, {
+        title: extraction.summary.slice(0, 120),
+        memoryType: extraction.memory_type ?? 'SHORT_TERM',
+        relatedPeople: [],
+        relatedPeriod: undefined,
+        bodyMarkdown: extraction.summary,
+        tags: [
+          ...(extraction.category ? [`category:${extraction.category}`] : []),
+          'source:ai_memory_extract',
+        ],
+        confidenceScore:
+          typeof extraction.importance === 'number'
+            ? Math.max(0, Math.min(1, extraction.importance / 10))
+            : 0.7,
+      });
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.MEMORY,
+        severity: SystemLogSeverity.WARN,
+        conversationId: params.conversationId,
+        detail: {
+          reason: 'ai_memory_extract_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
     }
   }
 

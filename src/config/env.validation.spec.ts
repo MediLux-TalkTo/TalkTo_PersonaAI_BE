@@ -19,17 +19,19 @@ describe('validateEnv', () => {
     expect(result.DB_SYNCHRONIZE).toBe(false);
     expect(result.DB_MIGRATIONS_RUN).toBe(true);
     expect(result.BOOTSTRAP_SEED).toBe(true);
-    expect(result.AI_SERVER_TIMEOUT_MS).toBe(10000);
+    expect(result.AI_SERVER_TIMEOUT_MS).toBe(45000);
   });
 
   it('parses optional AI server settings', () => {
     const result = validateEnv({
       ...baseConfig,
       AI_SERVER_URL: 'http://localhost:8000',
+      AI_SERVER_TOKEN: 'shared-secret',
       AI_SERVER_TIMEOUT_MS: '2500',
     });
 
     expect(result.AI_SERVER_URL).toBe('http://localhost:8000');
+    expect(result.AI_SERVER_TOKEN).toBe('shared-secret');
     expect(result.AI_SERVER_TIMEOUT_MS).toBe(2500);
   });
 
