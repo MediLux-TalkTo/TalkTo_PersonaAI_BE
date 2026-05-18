@@ -24,6 +24,7 @@ export interface RuntimeEnv {
   JWT_ACCESS_EXPIRES_IN: string;
   JWT_REFRESH_EXPIRES_IN: string;
   AI_SERVER_URL?: string;
+  AI_SERVER_TOKEN?: string;
   AI_SERVER_TIMEOUT_MS: number;
   ADMIN_NAME: string;
   ADMIN_EMAIL: string;
@@ -87,10 +88,11 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       errors,
     ),
     AI_SERVER_URL: readOptionalString(config, 'AI_SERVER_URL'),
+    AI_SERVER_TOKEN: readOptionalString(config, 'AI_SERVER_TOKEN'),
     AI_SERVER_TIMEOUT_MS: readNumber(
       config,
       'AI_SERVER_TIMEOUT_MS',
-      10000,
+      45000,
       errors,
       { min: 1000 },
     ),

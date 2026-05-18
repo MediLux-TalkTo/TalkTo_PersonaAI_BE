@@ -24,6 +24,21 @@ export interface AiChatResponse {
   latency_ms?: number;
 }
 
+export interface AiMemoryExtractRequest {
+  history: AiChatHistoryItem[];
+  user_message: string;
+  assistant_message: string;
+}
+
+export interface AiMemoryExtractResponse {
+  saved: boolean;
+  importance?: number;
+  memory_type?: string;
+  category?: string;
+  summary?: string;
+  reason?: string;
+}
+
 interface AiEmbedResponse {
   embedding?: number[];
 }
@@ -71,10 +86,97 @@ export class AiClientService {
     return response.embedding;
   }
 
+  async extractMemory(
+    request: AiMemoryExtractRequest,
+  ): Promise<AiMemoryExtractResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    return this.postJson<AiMemoryExtractResponse>('/ai/memory/extract', request);
+  }
+
+  async transcribe(file: Express.Multer.File): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    const formData = new FormData();
+    const audioBytes = file.buffer.buffer.slice(
+      file.buffer.byteOffset,
+      file.buffer.byteOffset + file.buffer.byteLength,
+    ) as ArrayBuffer;
+    const blob = new Blob([audioBytes], {
+      type: file.mimetype || 'application/octet-stream',
+    });
+    formData.append('audio_file', blob, file.originalname);
+
+    const response = await this.postForm<{ stt_text?: string; text?: string }>(
+      '/ai/stt',
+      formData,
+    );
+    const sttText = response.stt_text ?? response.text;
+
+    if (!sttText || typeof sttText !== 'string') {
+      throw new Error('AI STT response is missing text.');
+    }
+
+    return sttText;
+  }
+
+  async synthesizeSpeech(text: string): Promise<Buffer | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    const response = await this.postRaw('/ai/tts', { text });
+    const contentType = response.headers.get('content-type') ?? '';
+
+    if (!contentType.includes('audio/mpeg')) {
+      throw new Error('AI TTS response is not audio/mpeg.');
+    }
+
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   private async postJson<TResponse>(
     path: string,
     payload: unknown,
   ): Promise<TResponse> {
+    const response = await this.request(path, {
+      method: 'POST',
+      headers: this.buildJsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    return (await response.json()) as TResponse;
+  }
+
+  private async postForm<TResponse>(
+    path: string,
+    formData: FormData,
+  ): Promise<TResponse> {
+    const response = await this.request(path, {
+      method: 'POST',
+      headers: this.buildAuthHeaders(),
+      body: formData,
+    });
+
+    return (await response.json()) as TResponse;
+  }
+
+  private async postRaw(
+    path: string,
+    payload: unknown,
+  ): Promise<Response> {
+    return this.request(path, {
+      method: 'POST',
+      headers: this.buildJsonHeaders(),
+      body: JSON.stringify(payload),
+    });
+  }
+
+  private async request(path: string, init: RequestInit): Promise<Response> {
     const baseUrl = this.getBaseUrl();
 
     if (!baseUrl) {
@@ -82,16 +184,12 @@ export class AiClientService {
     }
 
     const controller = new AbortController();
-    const timeoutMs = this.configService.get<number>('AI_SERVER_TIMEOUT_MS') ?? 10000;
+    const timeoutMs = this.configService.get<number>('AI_SERVER_TIMEOUT_MS') ?? 45000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(`${baseUrl}${path}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        ...init,
         signal: controller.signal,
       });
 
@@ -99,7 +197,7 @@ export class AiClientService {
         throw new Error(`AI server returned ${response.status}.`);
       }
 
-      return (await response.json()) as TResponse;
+      return response;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         const timeoutError = new Error(
@@ -112,6 +210,25 @@ export class AiClientService {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private buildJsonHeaders(): HeadersInit {
+    return {
+      ...this.buildAuthHeaders(),
+      'content-type': 'application/json',
+    };
+  }
+
+  private buildAuthHeaders(): HeadersInit {
+    const token = this.configService.get<string>('AI_SERVER_TOKEN')?.trim();
+
+    if (!token) {
+      return {};
+    }
+
+    return {
+      'x-ai-server-token': token,
+    };
   }
 
   private getBaseUrl(): string | null {

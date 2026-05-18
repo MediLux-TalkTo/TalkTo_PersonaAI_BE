@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminModule } from '../admin/admin.module';
 import { AiModule } from '../ai/ai.module';
+import { MemoriesModule } from '../memories/memories.module';
 import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { PersonasModule } from '../personas/personas.module';
@@ -24,6 +25,7 @@ import { VoiceArtifact } from './voice-artifact.entity';
       MemoryEmbedding,
     ]),
     AiModule,
+    MemoriesModule,
     PersonasModule,
     AdminModule,
   ],

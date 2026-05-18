@@ -47,7 +47,8 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - Development mode uses TypeORM `synchronize` through `DB_SYNCHRONIZE=true`
 - Production startup rejects unsafe defaults such as `DB_SYNCHRONIZE=true`, `BOOTSTRAP_SEED=true`, or placeholder JWT secrets
 - If `AI_SERVER_URL` is unset, chat and embedding flows keep using local fallback behavior
-- Voice provider integration is scaffolded through persisted contracts; TTS audio storage still requires the file storage decision
+- Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
+- Voice STT can use the AI server when configured; TTS audio storage still requires the file storage decision
 
 ## Migration commands
 
