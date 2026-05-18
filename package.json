@@ -12,6 +12,7 @@
     "start:debug": "nest start --debug --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "jest --config jest.config.cjs",
+    "test:e2e": "jest --config jest.config.cjs --runTestsByPath src/e2e/persona-ai.e2e.spec.ts",
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:cov": "jest --config jest.config.cjs --coverage",
     "typeorm": "node --require ts-node/register --require tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/database/data-source.ts",
