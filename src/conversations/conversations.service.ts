@@ -21,6 +21,7 @@ import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
+import { AudioStorageService } from '../storage/audio-storage.service';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendTextMessageDto } from './dto/send-text-message.dto';
 import { SendVoiceMessageDto } from './dto/send-voice-message.dto';
@@ -39,6 +40,7 @@ export class ConversationsService {
     private readonly chatRuntimeService: ChatRuntimeService,
     private readonly aiClientService: AiClientService,
     private readonly memoriesService: MemoriesService,
+    private readonly audioStorageService: AudioStorageService,
     private readonly adminService: AdminService,
     @InjectRepository(Conversation)
     private readonly conversationsRepository: Repository<Conversation>,
@@ -217,14 +219,19 @@ export class ConversationsService {
         });
         const savedAssistantMessage = await manager.save(assistantMessage);
 
+        const ttsResult = await this.generateAndStoreTtsAudio({
+          conversationId,
+          messageId: savedAssistantMessage.id,
+          text: assistantReply.content,
+        });
         const voiceArtifact = manager.create(VoiceArtifact, {
           messageId: savedUserMessage.id,
           audioInputUrl: `/uploads/${Date.now()}-${file.originalname}`,
           sttText,
-          ttsAudioUrl: null,
+          ttsAudioUrl: ttsResult.ttsAudioUrl,
           sttStatus: 'COMPLETED',
-          ttsStatus: 'PENDING',
-          fallbackTextUsed: true,
+          ttsStatus: ttsResult.ttsStatus,
+          fallbackTextUsed: ttsResult.fallbackTextUsed,
         });
         const savedVoiceArtifact = await manager.save(voiceArtifact);
 
@@ -274,6 +281,57 @@ export class ConversationsService {
         },
       });
       throw error;
+    }
+  }
+
+  private async generateAndStoreTtsAudio(params: {
+    conversationId: string;
+    messageId: string;
+    text: string;
+  }): Promise<{
+    ttsAudioUrl: string | null;
+    ttsStatus: string;
+    fallbackTextUsed: boolean;
+  }> {
+    try {
+      const audioBuffer = await this.aiClientService.synthesizeSpeech(params.text);
+
+      if (!audioBuffer) {
+        return {
+          ttsAudioUrl: null,
+          ttsStatus: 'PENDING',
+          fallbackTextUsed: true,
+        };
+      }
+
+      const storedAudio = await this.audioStorageService.saveMp3({
+        buffer: audioBuffer,
+        conversationId: params.conversationId,
+        messageId: params.messageId,
+      });
+
+      return {
+        ttsAudioUrl: storedAudio.url,
+        ttsStatus: 'COMPLETED',
+        fallbackTextUsed: false,
+      };
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.TTS,
+        severity: SystemLogSeverity.WARN,
+        conversationId: params.conversationId,
+        messageId: params.messageId,
+        detail: {
+          reason: 'ai_tts_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+
+      return {
+        ttsAudioUrl: null,
+        ttsStatus: 'FAILED',
+        fallbackTextUsed: true,
+      };
     }
   }
 

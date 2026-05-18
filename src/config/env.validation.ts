@@ -26,6 +26,10 @@ export interface RuntimeEnv {
   AI_SERVER_URL?: string;
   AI_SERVER_TOKEN?: string;
   AI_SERVER_TIMEOUT_MS: number;
+  AUDIO_STORAGE_DRIVER: string;
+  LOCAL_AUDIO_STORAGE_DIR: string;
+  LOCAL_AUDIO_PUBLIC_PATH: string;
+  AUDIO_SIGNED_URL_TTL_SECONDS: number;
   ADMIN_NAME: string;
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
@@ -95,6 +99,32 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       45000,
       errors,
       { min: 1000 },
+    ),
+    AUDIO_STORAGE_DRIVER: readEnum(
+      config,
+      'AUDIO_STORAGE_DRIVER',
+      ['local'],
+      'local',
+      errors,
+    ),
+    LOCAL_AUDIO_STORAGE_DIR: readString(
+      config,
+      'LOCAL_AUDIO_STORAGE_DIR',
+      'storage/audio',
+      errors,
+    ),
+    LOCAL_AUDIO_PUBLIC_PATH: readString(
+      config,
+      'LOCAL_AUDIO_PUBLIC_PATH',
+      '/audio',
+      errors,
+    ),
+    AUDIO_SIGNED_URL_TTL_SECONDS: readNumber(
+      config,
+      'AUDIO_SIGNED_URL_TTL_SECONDS',
+      3600,
+      errors,
+      { min: 60 },
     ),
     ADMIN_NAME: readString(config, 'ADMIN_NAME', 'Local Admin', errors),
     ADMIN_EMAIL: readString(config, 'ADMIN_EMAIL', 'admin@talkto.local', errors),

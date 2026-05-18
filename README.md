@@ -49,6 +49,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - If `AI_SERVER_URL` is unset, chat and embedding flows keep using local fallback behavior
 - Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
 - Voice STT can use the AI server when configured; TTS audio storage still requires the file storage decision
+- Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
 
 ## Migration commands
 
@@ -75,3 +76,18 @@ ADMIN_PASSWORD=... GITHUB_TOKEN=... npm run import:memories
 ```
 
 Use `IMPORT_DRY_RUN=true` to validate the source without writing to the backend.
+
+## Audio storage
+
+The current implemented driver is local filesystem storage:
+
+```env
+AUDIO_STORAGE_DRIVER=local
+LOCAL_AUDIO_STORAGE_DIR=storage/audio
+LOCAL_AUDIO_PUBLIC_PATH=/audio
+AUDIO_SIGNED_URL_TTL_SECONDS=3600
+```
+
+When voice TTS succeeds, mp3 bytes are stored under `LOCAL_AUDIO_STORAGE_DIR`
+and returned as a URL under `LOCAL_AUDIO_PUBLIC_PATH`. S3/R2 can be added later
+behind the same storage service boundary.
