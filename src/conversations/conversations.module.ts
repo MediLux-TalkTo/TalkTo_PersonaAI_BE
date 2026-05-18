@@ -6,6 +6,7 @@ import { MemoriesModule } from '../memories/memories.module';
 import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { PersonasModule } from '../personas/personas.module';
+import { StorageModule } from '../storage/storage.module';
 import { ChatRuntimeService } from './chat-runtime.service';
 import { Conversation } from './conversation.entity';
 import { ConversationsController } from './conversations.controller';
@@ -27,6 +28,7 @@ import { VoiceArtifact } from './voice-artifact.entity';
     AiModule,
     MemoriesModule,
     PersonasModule,
+    StorageModule,
     AdminModule,
   ],
   controllers: [ConversationsController],
