@@ -50,7 +50,6 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
 - Voice STT can use the AI server when configured; TTS audio storage still requires the file storage decision
 - Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
-- `SENTRY_DSN` is reserved for external error tracking; do not send secrets or raw audio payloads to logs
 
 ## Migration commands
 

@@ -13,7 +13,6 @@ import { PersonasModule } from './personas/personas.module';
 import { UsersModule } from './users/users.module';
 import { MemoriesModule } from './memories/memories.module';
 import { FeedbackModule } from './feedback/feedback.module';
-import { ObservabilityModule } from './observability/observability.module';
 import { buildTypeOrmOptions } from './database/typeorm.config';
 import { validateEnv } from './config/env.validation';
 import { User } from './users/user.entity';
@@ -43,7 +42,6 @@ import { Persona } from './personas/persona.entity';
     FeedbackModule,
     HealthModule,
     MemoriesModule,
-    ObservabilityModule,
     PersonasModule,
     UsersModule,
   ],

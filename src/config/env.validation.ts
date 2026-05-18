@@ -30,7 +30,6 @@ export interface RuntimeEnv {
   LOCAL_AUDIO_STORAGE_DIR: string;
   LOCAL_AUDIO_PUBLIC_PATH: string;
   AUDIO_SIGNED_URL_TTL_SECONDS: number;
-  SENTRY_DSN?: string;
   ADMIN_NAME: string;
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
@@ -127,7 +126,6 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       errors,
       { min: 60 },
     ),
-    SENTRY_DSN: readOptionalString(config, 'SENTRY_DSN'),
     ADMIN_NAME: readString(config, 'ADMIN_NAME', 'Local Admin', errors),
     ADMIN_EMAIL: readString(config, 'ADMIN_EMAIL', 'admin@talkto.local', errors),
     ADMIN_PASSWORD: readString(
