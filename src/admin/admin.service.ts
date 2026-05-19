@@ -10,6 +10,7 @@ import { Conversation } from '../conversations/conversation.entity';
 import { Message } from '../conversations/message.entity';
 import { VoiceArtifact } from '../conversations/voice-artifact.entity';
 import { Feedback } from '../feedback/feedback.entity';
+import { QueryFeedbackReviewsDto } from './dto/query-feedback-reviews.dto';
 
 @Injectable()
 export class AdminService {
@@ -57,6 +58,59 @@ export class AdminService {
       feedbackNegativeRatio:
         feedbackTotal === 0 ? 0 : negativeFeedbackCount / feedbackTotal,
     };
+  }
+
+  async getNegativeFeedbackSummary() {
+    const feedbacks = await this.feedbackRepository.find({
+      select: {
+        id: true,
+        tags: true,
+      },
+      where: {
+        rating: FeedbackRating.DOWN,
+      },
+    });
+
+    const counts = new Map<string, number>();
+
+    for (const feedback of feedbacks) {
+      for (const tag of feedback.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+
+    return [...counts.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((left, right) => right.count - left.count || left.tag.localeCompare(right.tag));
+  }
+
+  async getFeedbackReviews(dto: QueryFeedbackReviewsDto) {
+    const feedbacks = await this.feedbackRepository.find({
+      where: dto.rating ? { rating: dto.rating } : {},
+      relations: {
+        message: {
+          conversation: true,
+        },
+        user: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+      take: dto.limit ?? 50,
+    });
+
+    return feedbacks.map((feedback) => ({
+      id: feedback.id,
+      createdAt: feedback.createdAt.toISOString(),
+      sessionId: feedback.message.conversationId,
+      messageId: feedback.messageId,
+      rating: feedback.rating,
+      tags: feedback.tags,
+      comment: feedback.comment,
+      messageContent: feedback.message.content,
+      userId: feedback.userId,
+      userName: feedback.user.name,
+    }));
   }
 
   async getErrorLogs(dto: QueryErrorLogsDto) {
