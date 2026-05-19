@@ -11,9 +11,12 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { success } from '../common/utils/api-response';
 import {
+  FeedbackReviewListResponseDto,
   MetricsOverviewResponseDto,
+  NegativeFeedbackSummaryResponseDto,
   SystemLogListResponseDto,
 } from './dto/admin-response.dto';
+import { QueryFeedbackReviewsDto } from './dto/query-feedback-reviews.dto';
 import { QueryErrorLogsDto } from './dto/query-error-logs.dto';
 import { AdminService } from './admin.service';
 
@@ -30,6 +33,20 @@ export class AdminController {
   @ApiOkResponse({ type: MetricsOverviewResponseDto })
   async getMetricsOverview() {
     return success(await this.adminService.getMetricsOverview());
+  }
+
+  @Get('feedback/negative-summary')
+  @ApiOperation({ summary: '부정 피드백 태그별 큐 조회' })
+  @ApiOkResponse({ type: NegativeFeedbackSummaryResponseDto })
+  async getNegativeFeedbackSummary() {
+    return success(await this.adminService.getNegativeFeedbackSummary());
+  }
+
+  @Get('feedback/reviews')
+  @ApiOperation({ summary: '피드백 검토 목록 조회' })
+  @ApiOkResponse({ type: FeedbackReviewListResponseDto })
+  async getFeedbackReviews(@Query() query: QueryFeedbackReviewsDto) {
+    return success(await this.adminService.getFeedbackReviews(query));
   }
 
   @Get('logs/errors')

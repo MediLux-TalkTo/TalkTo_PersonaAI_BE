@@ -1,6 +1,68 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiMetaDto } from '../../common/swagger/api-meta.dto';
 
+export class NegativeFeedbackSummaryItemDto {
+  @ApiProperty({ example: '사실이 틀렸어요' })
+  tag: string;
+
+  @ApiProperty({ example: 8 })
+  count: number;
+}
+
+export class NegativeFeedbackSummaryResponseDto {
+  @ApiProperty({ example: true })
+  success: boolean;
+
+  @ApiProperty({ type: [NegativeFeedbackSummaryItemDto] })
+  data: NegativeFeedbackSummaryItemDto[];
+
+  @ApiProperty({ type: ApiMetaDto })
+  meta: ApiMetaDto;
+}
+
+export class FeedbackReviewItemDto {
+  @ApiProperty({ example: 'fb-001' })
+  id: string;
+
+  @ApiProperty({ example: '2026-04-29T14:23:00.000Z' })
+  createdAt: string;
+
+  @ApiProperty({ example: 'session_1735478...a3f' })
+  sessionId: string;
+
+  @ApiProperty({ example: 'msg-001' })
+  messageId: string;
+
+  @ApiProperty({ example: 'DOWN' })
+  rating: string;
+
+  @ApiProperty({ type: [String], example: ['사실이 틀렸어요'] })
+  tags: string[];
+
+  @ApiProperty({ example: '정말 할머니 목소리 같았어요.', nullable: true })
+  comment: string | null;
+
+  @ApiProperty({ example: '어. 불고기는 간장이랑 마늘을 넣고...' })
+  messageContent: string;
+
+  @ApiProperty({ example: 'user-001' })
+  userId: string;
+
+  @ApiProperty({ example: '홍길동' })
+  userName: string;
+}
+
+export class FeedbackReviewListResponseDto {
+  @ApiProperty({ example: true })
+  success: boolean;
+
+  @ApiProperty({ type: [FeedbackReviewItemDto] })
+  data: FeedbackReviewItemDto[];
+
+  @ApiProperty({ type: ApiMetaDto })
+  meta: ApiMetaDto;
+}
+
 export class MetricsOverviewDto {
   @ApiProperty({ example: 12 })
   usersTotal: number;
