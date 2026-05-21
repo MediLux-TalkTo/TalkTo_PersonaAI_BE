@@ -21,7 +21,7 @@ export class VoiceArtifact {
   @Column({ type: 'text', nullable: true })
   sttText: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'text', nullable: true })
   ttsAudioUrl: string | null;
 
   @Column({ default: 'COMPLETED' })
