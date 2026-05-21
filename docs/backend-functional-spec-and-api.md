@@ -21,6 +21,14 @@ Out of scope for this document:
 - Internal AI prompt design details
 - Embedding model implementation details beyond backend contracts
 
+Current hosted MVP baseline:
+
+- Backend: `https://talkto-personaai-be.onrender.com`
+- AI server: `https://talkto-persona-ai.onrender.com`
+- Database: Neon PostgreSQL
+- Voice TTS asset storage: private Cloudflare R2 objects returned through signed URLs
+- Existing long-term memory import: 44 AI legacy memories already loaded into the backend DB
+
 ## 2. Product Goal
 
 The MVP provides a web backend that allows family users to chat with a grandmother persona in text and voice, while preserving conversation history, memory references, feedback, and admin-level usage visibility.
@@ -298,7 +306,9 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Memories | POST | `/api/v1/memories/{memoryId}/deactivate` | Deactivate memory | Admin |
 | Memories | POST | `/api/v1/memories/{memoryId}/reembed` | Request re-embedding | Admin |
 | Feedback | POST | `/api/v1/messages/{messageId}/feedback` | Submit feedback | User |
-| Feedback | GET | `/api/v1/admin/feedback` | List feedback | Admin |
+| Feedback | GET | `/api/v1/admin/feedback` | List all feedback | Admin |
+| Feedback | GET | `/api/v1/admin/feedback/negative-summary` | Negative feedback tag summary | Admin |
+| Feedback | GET | `/api/v1/admin/feedback/reviews` | Feedback review queue | Admin |
 | Admin | GET | `/api/v1/admin/metrics/overview` | Usage overview | Admin |
 | Admin | GET | `/api/v1/admin/logs/errors` | Error logs | Admin |
 
@@ -520,7 +530,42 @@ Request:
 }
 ```
 
-### 8.11 GET `/api/v1/admin/metrics/overview`
+### 8.11 GET `/api/v1/admin/feedback/negative-summary`
+
+Response item:
+
+```json
+{
+  "tag": "사실이 틀렸어요",
+  "count": 8
+}
+```
+
+### 8.12 GET `/api/v1/admin/feedback/reviews`
+
+Query:
+
+- `rating`
+- `limit`
+
+Response item:
+
+```json
+{
+  "id": "fb_123",
+  "createdAt": "2026-04-29T14:23:00.000Z",
+  "sessionId": "conv_123",
+  "messageId": "msg_123",
+  "rating": "DOWN",
+  "tags": ["사실이 틀렸어요"],
+  "comment": "기억에 없는 말을 지어냈어요.",
+  "messageContent": "어. 불고기는 간장이랑...",
+  "userId": "usr_123",
+  "userName": "홍길동"
+}
+```
+
+### 8.13 GET `/api/v1/admin/metrics/overview`
 
 Response:
 
@@ -538,7 +583,7 @@ Response:
 }
 ```
 
-### 8.12 GET `/api/v1/admin/logs/errors`
+### 8.14 GET `/api/v1/admin/logs/errors`
 
 Query:
 
@@ -570,20 +615,20 @@ Query:
 
 ## 11. Open Questions
 
-- Whether family users can create or edit memories directly, or only admins can
-- Whether one active persona is enough for MVP or multiple personas are expected soon
-- Whether text and voice response generation will be synchronous or queued
-- Whether conversation title generation is manual, automatic, or unnecessary
-- Whether consent versioning is required for legal tracking
-- Whether memory search is keyword-only at API level or hybrid semantic search
+- Whether past TTS playback must support signed URL reissue after URL expiry
+- Whether memory search should move from `float8[]` + TypeScript cosine similarity to pgvector DB search
+- Whether operational error tracking stays in `SystemLog` only or adds an external tool
+- Authentication/invitation policy for password reset and refresh-token operations
+- Whether the admin dashboard needs KPIs beyond metrics overview, negative feedback summary, and feedback reviews
 
 ## 12. Recommended Backend Build Order
 
-1. Auth, role guard, consent gate
-2. Persona read API
-3. Conversation and message persistence
-4. Text chat endpoint with AI integration contract
-5. Voice message endpoint with STT/TTS artifact storage
-6. Memory CRUD and revision logs
-7. Feedback collection
-8. Admin metrics and error log APIs
+Implemented MVP baseline:
+
+1. Auth, role guard, and consent persistence
+2. Persona read and admin metadata APIs
+3. Conversation, message, feedback, memory, and revision persistence
+4. Text chat with AI `/ai/embed` and `/ai/chat`
+5. Voice flow with AI STT/chat/TTS orchestration and R2-capable TTS storage
+6. Admin metrics, negative feedback summary, review queue, and error log APIs
+7. Render + Neon deployed smoke path for BE/DB verification
