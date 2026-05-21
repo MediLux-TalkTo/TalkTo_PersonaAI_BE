@@ -42,6 +42,15 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - optional AI server client for `/ai/chat` and `/ai/embed`
 - TypeORM migration CLI scaffold
 
+## Hosted MVP
+
+- Backend: `https://talkto-personaai-be.onrender.com`
+- Backend health: `https://talkto-personaai-be.onrender.com/api/v1/health`
+- AI server: `https://talkto-persona-ai.onrender.com`
+- Production database: Neon PostgreSQL
+- Voice TTS storage: private Cloudflare R2 bucket with signed playback URLs
+- Imported long-term memories: 44 legacy memories from the AI repository
+
 ## Notes
 
 - Development mode uses TypeORM `synchronize` through `DB_SYNCHRONIZE=true`
@@ -50,6 +59,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
 - Voice STT can use the AI server when configured; TTS audio can use local storage or Cloudflare R2
 - Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
+- Existing AI import payload includes conservative `relatedPeople` metadata when a source memory names the person explicitly
 
 ## Migration commands
 
