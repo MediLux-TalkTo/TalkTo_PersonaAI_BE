@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ArrayContains, ILike, Repository } from 'typeorm';
 import { AdminService } from '../admin/admin.service';
 import { AiClientService } from '../ai/ai-client.service';
 import {
@@ -49,7 +49,7 @@ export class MemoriesService {
 
     if (query.person) {
       where.forEach((item) => {
-        item.relatedPeople = ILike(`%${query.person}%`);
+        item.relatedPeople = ArrayContains([query.person]);
       });
     }
 
@@ -97,6 +97,8 @@ export class MemoriesService {
   async update(userId: string, memoryId: string, dto: UpdateMemoryDto): Promise<Memory> {
     const memory = await this.getById(memoryId);
     const beforeSnapshot = { ...memory };
+    const shouldRebuildEmbeddings =
+      dto.bodyMarkdown !== undefined && dto.bodyMarkdown !== memory.bodyMarkdown;
 
     Object.assign(memory, {
       ...dto,
@@ -111,7 +113,9 @@ export class MemoriesService {
       saved,
       userId,
     );
-    await this.rebuildEmbeddings(saved);
+    if (shouldRebuildEmbeddings) {
+      await this.rebuildEmbeddings(saved);
+    }
 
     return this.getById(saved.id);
   }
