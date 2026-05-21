@@ -17,6 +17,7 @@ export interface RuntimeEnv {
   DB_USERNAME: string;
   DB_PASSWORD: string;
   DB_NAME: string;
+  DB_SSL: boolean;
   DB_SYNCHRONIZE: boolean;
   DB_MIGRATIONS_RUN: boolean;
   JWT_ACCESS_SECRET: string;
@@ -30,6 +31,10 @@ export interface RuntimeEnv {
   LOCAL_AUDIO_STORAGE_DIR: string;
   LOCAL_AUDIO_PUBLIC_PATH: string;
   AUDIO_SIGNED_URL_TTL_SECONDS: number;
+  R2_ACCOUNT_ID?: string;
+  R2_BUCKET_NAME?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
   ADMIN_NAME: string;
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
@@ -65,6 +70,7 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
     DB_USERNAME: readString(config, 'DB_USERNAME', 'postgres', errors),
     DB_PASSWORD: readString(config, 'DB_PASSWORD', 'postgres', errors),
     DB_NAME: readString(config, 'DB_NAME', 'talkto_persona_ai', errors),
+    DB_SSL: readBoolean(config, 'DB_SSL', false, errors),
     DB_SYNCHRONIZE: readBoolean(config, 'DB_SYNCHRONIZE', true, errors),
     DB_MIGRATIONS_RUN: readBoolean(
       config,
@@ -103,7 +109,7 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
     AUDIO_STORAGE_DRIVER: readEnum(
       config,
       'AUDIO_STORAGE_DRIVER',
-      ['local'],
+      ['local', 'r2'],
       'local',
       errors,
     ),
@@ -126,6 +132,10 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       errors,
       { min: 60 },
     ),
+    R2_ACCOUNT_ID: readOptionalString(config, 'R2_ACCOUNT_ID'),
+    R2_BUCKET_NAME: readOptionalString(config, 'R2_BUCKET_NAME'),
+    R2_ACCESS_KEY_ID: readOptionalString(config, 'R2_ACCESS_KEY_ID'),
+    R2_SECRET_ACCESS_KEY: readOptionalString(config, 'R2_SECRET_ACCESS_KEY'),
     ADMIN_NAME: readString(config, 'ADMIN_NAME', 'Local Admin', errors),
     ADMIN_EMAIL: readString(config, 'ADMIN_EMAIL', 'admin@talkto.local', errors),
     ADMIN_PASSWORD: readString(
@@ -136,6 +146,13 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
     ),
     BOOTSTRAP_SEED: readBoolean(config, 'BOOTSTRAP_SEED', false, errors),
   };
+
+  if (validatedEnv.AUDIO_STORAGE_DRIVER === 'r2') {
+    requireDefined(validatedEnv.R2_ACCOUNT_ID, 'R2_ACCOUNT_ID', errors);
+    requireDefined(validatedEnv.R2_BUCKET_NAME, 'R2_BUCKET_NAME', errors);
+    requireDefined(validatedEnv.R2_ACCESS_KEY_ID, 'R2_ACCESS_KEY_ID', errors);
+    requireDefined(validatedEnv.R2_SECRET_ACCESS_KEY, 'R2_SECRET_ACCESS_KEY', errors);
+  }
 
   if (validatedEnv.NODE_ENV === NodeEnvironment.PRODUCTION) {
     if (validatedEnv.DB_SYNCHRONIZE) {
@@ -159,6 +176,16 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
   }
 
   return validatedEnv;
+}
+
+function requireDefined(
+  value: string | undefined,
+  key: string,
+  errors: string[],
+) {
+  if (!value) {
+    errors.push(`${key} is required.`);
+  }
 }
 
 function readString(
