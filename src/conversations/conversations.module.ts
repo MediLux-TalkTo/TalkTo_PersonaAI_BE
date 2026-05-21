@@ -11,6 +11,7 @@ import { ChatRuntimeService } from './chat-runtime.service';
 import { Conversation } from './conversation.entity';
 import { ConversationsController } from './conversations.controller';
 import { ConversationsService } from './conversations.service';
+import { MemoryRetrievalService } from './memory-retrieval.service';
 import { MessageMemoryRef } from './message-memory-ref.entity';
 import { Message } from './message.entity';
 import { VoiceArtifact } from './voice-artifact.entity';
@@ -32,6 +33,6 @@ import { VoiceArtifact } from './voice-artifact.entity';
     AdminModule,
   ],
   controllers: [ConversationsController],
-  providers: [ConversationsService, ChatRuntimeService],
+  providers: [ConversationsService, ChatRuntimeService, MemoryRetrievalService],
 })
 export class ConversationsModule {}

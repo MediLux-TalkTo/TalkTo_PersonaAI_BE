@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { AiChatHistoryItem, AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
 import {
@@ -16,8 +16,6 @@ import {
   MessageSenderType,
   MessageStatus,
 } from '../common/enums/message.enums';
-import { MemoryStatus } from '../common/enums/memory.enums';
-import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
@@ -31,6 +29,7 @@ import { MessageMemoryRef } from './message-memory-ref.entity';
 import { Message } from './message.entity';
 import { VoiceArtifact } from './voice-artifact.entity';
 import { Role } from '../common/enums/role.enum';
+import { MemoryRetrievalService } from './memory-retrieval.service';
 
 @Injectable()
 export class ConversationsService {
@@ -40,6 +39,7 @@ export class ConversationsService {
     private readonly chatRuntimeService: ChatRuntimeService,
     private readonly aiClientService: AiClientService,
     private readonly memoriesService: MemoriesService,
+    private readonly memoryRetrievalService: MemoryRetrievalService,
     private readonly audioStorageService: AudioStorageService,
     private readonly adminService: AdminService,
     @InjectRepository(Conversation)
@@ -50,10 +50,6 @@ export class ConversationsService {
     private readonly messageMemoryRefsRepository: Repository<MessageMemoryRef>,
     @InjectRepository(VoiceArtifact)
     private readonly voiceArtifactsRepository: Repository<VoiceArtifact>,
-    @InjectRepository(Memory)
-    private readonly memoriesRepository: Repository<Memory>,
-    @InjectRepository(MemoryEmbedding)
-    private readonly memoryEmbeddingsRepository: Repository<MemoryEmbedding>,
   ) {}
 
   async createConversation(userId: string, dto: CreateConversationDto) {
@@ -110,7 +106,7 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const persona = await this.personasService.getActivePersona();
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.retrieveMemories(dto.content);
+    const relatedMemories = await this.memoryRetrievalService.retrieve(dto.content);
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
@@ -187,7 +183,7 @@ export class ConversationsService {
     const persona = await this.personasService.getActivePersona();
     const sttText = await this.resolveSttText(conversationId, dto, file);
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.retrieveMemories(sttText);
+    const relatedMemories = await this.memoryRetrievalService.retrieve(sttText);
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
@@ -379,90 +375,6 @@ export class ConversationsService {
     return conversation;
   }
 
-  private async retrieveMemories(query: string): Promise<Memory[]> {
-    const trimmed = query.trim();
-
-    if (!trimmed) {
-      return this.memoriesRepository.find({
-        where: { status: MemoryStatus.ACTIVE },
-        take: 3,
-        order: { updatedAt: 'DESC' },
-      });
-    }
-
-    const vectorMatches = await this.retrieveMemoriesByVector(trimmed);
-
-    if (vectorMatches.length > 0) {
-      return vectorMatches;
-    }
-
-    return this.retrieveMemoriesByKeyword(trimmed);
-  }
-
-  private async retrieveMemoriesByKeyword(query: string): Promise<Memory[]> {
-    return this.memoriesRepository.find({
-      where: [
-        { status: MemoryStatus.ACTIVE, title: ILike(`%${query}%`) },
-        { status: MemoryStatus.ACTIVE, bodyMarkdown: ILike(`%${query}%`) },
-      ],
-      take: 3,
-      order: { updatedAt: 'DESC' },
-    });
-  }
-
-  private async retrieveMemoriesByVector(query: string): Promise<Memory[]> {
-    let queryEmbedding: number[] | null = null;
-
-    try {
-      queryEmbedding = await this.aiClientService.embed(query);
-    } catch (error) {
-      await this.adminService.recordLog({
-        category: SystemLogCategory.MEMORY,
-        severity: SystemLogSeverity.WARN,
-        detail: {
-          reason: 'query_embedding_failed',
-          error: error instanceof Error ? error.message : 'unknown',
-        },
-      });
-    }
-
-    if (!queryEmbedding) {
-      return [];
-    }
-
-    const embeddings = await this.memoryEmbeddingsRepository.find({
-      where: {
-        memory: {
-          status: MemoryStatus.ACTIVE,
-        },
-      },
-      relations: ['memory'],
-    });
-    const scores = new Map<string, { memory: Memory; score: number }>();
-
-    for (const embedding of embeddings) {
-      if (!embedding.embedding) {
-        continue;
-      }
-
-      const score = this.cosineSimilarity(queryEmbedding, embedding.embedding);
-      const current = scores.get(embedding.memoryId);
-
-      if (!current || score > current.score) {
-        scores.set(embedding.memoryId, {
-          memory: embedding.memory,
-          score,
-        });
-      }
-    }
-
-    return Array.from(scores.values())
-      .filter(({ score }) => score > 0)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 3)
-      .map(({ memory }) => memory);
-  }
-
   private async getConversationHistory(
     conversationId: string,
   ): Promise<AiChatHistoryItem[]> {
@@ -572,23 +484,4 @@ export class ConversationsService {
     }
   }
 
-  private cosineSimilarity(left: number[], right: number[]): number {
-    if (left.length !== right.length || left.length === 0) {
-      return 0;
-    }
-
-    let dotProduct = 0;
-    let leftMagnitude = 0;
-    let rightMagnitude = 0;
-
-    for (let index = 0; index < left.length; index += 1) {
-      dotProduct += left[index] * right[index];
-      leftMagnitude += left[index] ** 2;
-      rightMagnitude += right[index] ** 2;
-    }
-
-    const denominator = Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude);
-
-    return denominator === 0 ? 0 : dotProduct / denominator;
-  }
 }
