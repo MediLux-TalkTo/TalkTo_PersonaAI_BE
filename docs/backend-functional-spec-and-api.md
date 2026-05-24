@@ -27,8 +27,10 @@ Current hosted MVP baseline:
 - AI server: `https://talkto-persona-ai.onrender.com`
 - Database: Neon PostgreSQL
 - Voice TTS asset storage: private Cloudflare R2 objects returned through signed URLs
-- Existing long-term memory import: AI repository `data/memories.json` is the source data and `backend_memory/memory_import.json` is the backend import payload
-- 2026-05-24 check: AI repository `main` currently exposes 44 memories; ver4 72-memory import is pending on the AI data update and backend re-import
+- Long-term memory source: AI repository `data/memories.json`
+- Backend memory import payload: AI repository `backend_memory/memory_import.json`
+- Ver4 memory import contract: 72 manually curated `LONG_TERM` memories, no `confidenceScore`, and pass-through string tags
+- The backend stores and forwards memory tags to `/ai/chat`; tag interpretation stays in the AI prompt, not backend search policy
 
 ## 2. Product Goal
 

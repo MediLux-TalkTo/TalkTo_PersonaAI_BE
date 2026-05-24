@@ -14,6 +14,8 @@ const adminEmail = process.env.ADMIN_EMAIL || 'admin@talkto.local';
 const adminPassword = process.env.ADMIN_PASSWORD;
 const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || readGhToken();
 const dryRun = process.env.IMPORT_DRY_RUN === 'true';
+const strictVer4Import = process.env.MEMORY_IMPORT_STRICT_VER4 !== 'false';
+const expectedMemoryCount = Number(process.env.MEMORY_IMPORT_EXPECTED_COUNT || 72);
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : error);
@@ -90,6 +92,12 @@ function validateMemories(memories) {
     throw new Error('Memory import payload must be an array.');
   }
 
+  if (strictVer4Import && memories.length !== expectedMemoryCount) {
+    throw new Error(
+      `Memory import payload must include ${expectedMemoryCount} memories for ver4. Received ${memories.length}.`,
+    );
+  }
+
   for (const [index, memory] of memories.entries()) {
     const missing = ['title', 'memoryType', 'bodyMarkdown'].filter(
       (key) => typeof memory[key] !== 'string' || memory[key].trim() === '',
@@ -107,6 +115,16 @@ function validateMemories(memories) {
 
     if (memory.memoryType !== 'LONG_TERM') {
       throw new Error(`Memory item ${index} must use memoryType LONG_TERM.`);
+    }
+
+    if (strictVer4Import && Object.prototype.hasOwnProperty.call(memory, 'confidenceScore')) {
+      throw new Error(
+        `Memory item ${index} must not include confidenceScore in ver4 import payload.`,
+      );
+    }
+
+    if (memory.tags.some((tag) => typeof tag !== 'string' || tag.trim() === '')) {
+      throw new Error(`Memory item ${index} must include only non-empty string tags.`);
     }
   }
 }
