@@ -8,6 +8,7 @@ describe('ChatRuntimeService', () => {
     id: 'memory-1',
     title: '불고기',
     bodyMarkdown: '불고기는 간장과 마늘을 넣고 만들던 기억',
+    tags: ['sensitive'],
   } as any;
 
   it('uses local fallback when AI server is not configured', async () => {
@@ -46,5 +47,34 @@ describe('ChatRuntimeService', () => {
     expect(result.usedFallback).toBe(false);
     expect(result.retrievedMemoryIds).toEqual(['memory-1']);
     expect(result.latencyMs).toBe(900);
+  });
+
+  it('passes memory tags to the AI chat request', async () => {
+    const chat = jest.fn().mockResolvedValue({
+      content: '태그를 참고한 답변',
+      retrieved_memory_ids: ['memory-1'],
+      latency_ms: 500,
+    });
+    const service = new ChatRuntimeService({ chat } as any);
+
+    await service.generateAssistantReply({
+      persona,
+      userMessage: '마지막을 못 봐서 미안해',
+      memories: [memory],
+      history: [],
+    });
+
+    expect(chat).toHaveBeenCalledWith({
+      message: '마지막을 못 봐서 미안해',
+      history: [],
+      memories: [
+        {
+          id: 'memory-1',
+          title: '불고기',
+          content: '불고기는 간장과 마늘을 넣고 만들던 기억',
+          tags: ['sensitive'],
+        },
+      ],
+    });
   });
 });

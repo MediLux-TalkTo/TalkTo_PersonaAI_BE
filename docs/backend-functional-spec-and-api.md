@@ -27,7 +27,8 @@ Current hosted MVP baseline:
 - AI server: `https://talkto-persona-ai.onrender.com`
 - Database: Neon PostgreSQL
 - Voice TTS asset storage: private Cloudflare R2 objects returned through signed URLs
-- Existing long-term memory import: 44 AI legacy memories already loaded into the backend DB
+- Existing long-term memory import: AI repository `data/memories.json` is the source data and `backend_memory/memory_import.json` is the backend import payload
+- 2026-05-24 check: AI repository `main` currently exposes 44 memories; ver4 72-memory import is pending on the AI data update and backend re-import
 
 ## 2. Product Goal
 

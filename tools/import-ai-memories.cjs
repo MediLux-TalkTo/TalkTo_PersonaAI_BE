@@ -3,7 +3,7 @@
 const { execFileSync } = require('child_process');
 
 const DEFAULT_SOURCE_URL =
-  'https://api.github.com/repos/MediLux-TalkTo/TalkTo_PersonaAI_AI/contents/data/backend_memory_import.json?ref=main';
+  'https://api.github.com/repos/MediLux-TalkTo/TalkTo_PersonaAI_AI/contents/backend_memory/memory_import.json?ref=main';
 
 const sourceUrl = process.env.MEMORY_IMPORT_SOURCE_URL || DEFAULT_SOURCE_URL;
 const backendUrl = (process.env.BACKEND_URL || 'http://localhost:3000').replace(
@@ -36,23 +36,25 @@ async function main() {
   }
 
   const accessToken = await login();
-  const existingLegacyTags = await loadExistingLegacyTags(accessToken);
+  const existingMemories = await loadExistingMemories(accessToken);
   let created = 0;
-  let skipped = 0;
+  let updated = 0;
 
   for (const memory of memories) {
-    const legacyTag = memory.tags.find((tag) => tag.startsWith('legacy_id:'));
+    const existingMemory = findExistingMemory(existingMemories, memory);
+    const importPayload = toBackendImportPayload(memory);
 
-    if (legacyTag && existingLegacyTags.has(legacyTag)) {
-      skipped += 1;
+    if (existingMemory) {
+      await updateMemory(accessToken, existingMemory.id, importPayload);
+      updated += 1;
       continue;
     }
 
-    await createMemory(accessToken, memory);
+    await createMemory(accessToken, importPayload);
     created += 1;
   }
 
-  console.log(`Import complete. created=${created} skipped=${skipped}`);
+  console.log(`Import complete. created=${created} updated=${updated}`);
 }
 
 async function loadMemories() {
@@ -133,7 +135,7 @@ async function login() {
   return accessToken;
 }
 
-async function loadExistingLegacyTags(accessToken) {
+async function loadExistingMemories(accessToken) {
   const response = await fetch(`${backendUrl}/api/v1/memories?status=ACTIVE`, {
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -145,18 +147,38 @@ async function loadExistingLegacyTags(accessToken) {
   }
 
   const envelope = await response.json();
-  const memories = Array.isArray(envelope?.data) ? envelope.data : [];
-  const legacyTags = new Set();
+  return Array.isArray(envelope?.data) ? envelope.data : [];
+}
 
-  for (const memory of memories) {
-    for (const tag of memory.tags || []) {
-      if (typeof tag === 'string' && tag.startsWith('legacy_id:')) {
-        legacyTags.add(tag);
-      }
+function findExistingMemory(existingMemories, importMemory) {
+  const legacyTag = importMemory.tags.find((tag) => tag.startsWith('legacy_id:'));
+
+  if (legacyTag) {
+    const legacyMatch = existingMemories.find((memory) =>
+      (memory.tags || []).includes(legacyTag),
+    );
+
+    if (legacyMatch) {
+      return legacyMatch;
     }
   }
 
-  return legacyTags;
+  return existingMemories.find(
+    (memory) =>
+      memory.title === importMemory.title &&
+      memory.memoryType === importMemory.memoryType,
+  );
+}
+
+function toBackendImportPayload(memory) {
+  return {
+    title: memory.title,
+    memoryType: memory.memoryType,
+    relatedPeople: memory.relatedPeople ?? [],
+    relatedPeriod: memory.relatedPeriod ?? null,
+    bodyMarkdown: memory.bodyMarkdown,
+    tags: memory.tags ?? [],
+  };
 }
 
 async function createMemory(accessToken, memory) {
@@ -171,6 +193,21 @@ async function createMemory(accessToken, memory) {
 
   if (!response.ok) {
     throw new Error(`Failed to create memory "${memory.title}": ${response.status}.`);
+  }
+}
+
+async function updateMemory(accessToken, memoryId, memory) {
+  const response = await fetch(`${backendUrl}/api/v1/memories/${memoryId}`, {
+    method: 'PATCH',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(memory),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update memory "${memory.title}": ${response.status}.`);
   }
 }
 

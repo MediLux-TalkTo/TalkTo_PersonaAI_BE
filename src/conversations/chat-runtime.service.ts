@@ -31,6 +31,7 @@ export class ChatRuntimeService {
         id: memory.id,
         title: memory.title,
         content: memory.bodyMarkdown,
+        tags: memory.tags ?? [],
       })),
     });
 

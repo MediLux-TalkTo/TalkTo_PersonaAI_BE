@@ -39,7 +39,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - global rate limiting
 - environment validation on bootstrap
 - guarded local seed bootstrap
-- optional AI server client for `/ai/chat` and `/ai/embed`
+- optional AI server client for `/ai/chat`, `/ai/embed`, `/ai/memory/extract`, STT, and TTS
 - TypeORM migration CLI scaffold
 
 ## Hosted MVP
@@ -49,7 +49,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - AI server: `https://talkto-persona-ai.onrender.com`
 - Production database: Neon PostgreSQL
 - Voice TTS storage: private Cloudflare R2 bucket with signed playback URLs
-- Imported long-term memories: 44 legacy memories from the AI repository
+- Imported long-term memories: AI repository memory import source
 
 ## Notes
 
@@ -59,7 +59,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
 - Voice STT can use the AI server when configured; TTS audio can use local storage or Cloudflare R2
 - Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
-- Existing AI import payload includes conservative `relatedPeople` metadata when a source memory names the person explicitly
+- AI chat requests forward memory `tags` to the AI server. The backend stores and passes tags through; tag interpretation such as `sensitive` is handled by the AI prompt.
 
 ## Migration commands
 
@@ -74,12 +74,25 @@ If you switch to migration-based schema control, set `DB_SYNCHRONIZE=false`.
 
 ## Memory import
 
-Long-term memory import data is owned by the AI repository:
+Long-term memory source data is owned by the AI repository:
 
-- `MediLux-TalkTo/TalkTo_PersonaAI_AI:data/backend_memory_import.json`
+- Source memories: `MediLux-TalkTo/TalkTo_PersonaAI_AI:data/memories.json`
+- Backend import payload: `MediLux-TalkTo/TalkTo_PersonaAI_AI:backend_memory/memory_import.json`
 
-The backend imports that source through the GitHub Contents API and does not keep
-a copied data file in this repository.
+The backend imports the backend payload through the GitHub Contents API and does
+not keep a copied data file in this repository. Re-running the import updates
+existing memories matched by legacy tag or by `title + memoryType`, and creates
+new memories for unmatched rows.
+
+As of 2026-05-24, the AI repository `main` branch still exposes 44 memories in
+both `data/memories.json` and `backend_memory/memory_import.json`. When the AI
+repository updates those files to the ver4 72-memory dataset, rerun the import
+against the deployed backend.
+
+The import script sends only the backend memory fields used by the current
+contract. `confidenceScore` in a source file is ignored for long-term import
+payloads because manually curated long-term memories do not need an explicit
+confidence score.
 
 ```bash
 ADMIN_PASSWORD=... GITHUB_TOKEN=... npm run import:memories

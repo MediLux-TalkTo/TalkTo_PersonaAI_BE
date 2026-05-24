@@ -5,6 +5,7 @@ export interface AiChatMemory {
   id: string;
   title: string;
   content: string;
+  tags?: string[];
 }
 
 export interface AiChatHistoryItem {
