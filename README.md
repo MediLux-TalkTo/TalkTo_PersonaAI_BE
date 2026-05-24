@@ -49,7 +49,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - AI server: `https://talkto-persona-ai.onrender.com`
 - Production database: Neon PostgreSQL
 - Voice TTS storage: private Cloudflare R2 bucket with signed playback URLs
-- Imported long-term memories: AI repository memory import source
+- Imported long-term memories: 72 active `LONG_TERM` memories from the AI repository payload
 
 ## Notes
 

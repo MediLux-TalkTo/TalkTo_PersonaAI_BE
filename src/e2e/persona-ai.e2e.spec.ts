@@ -69,7 +69,7 @@ describe('Persona AI deployed API smoke', () => {
       accessToken = login.data.accessToken;
     });
 
-    it('loads the active persona and imported long-term memories', async () => {
+    it('loads the active persona and ver4 long-term memories', async () => {
       const [persona, memories] = await Promise.all([
         request<ApiEnvelope<PersonaResponse>>('/api/v1/personas/active', {
           accessToken,
@@ -82,7 +82,7 @@ describe('Persona AI deployed API smoke', () => {
       personaId = persona.data.id;
 
       expect(personaId).toBeTruthy();
-      expect(memories.data.length).toBeGreaterThanOrEqual(44);
+      expect(memories.data.length).toBeGreaterThanOrEqual(72);
     });
 
   });
