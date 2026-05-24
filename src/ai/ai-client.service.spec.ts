@@ -46,7 +46,14 @@ describe('AiClientService', () => {
     const result = await service.chat({
       message: '할머니 안녕',
       history: [],
-      memories: [{ id: 'memory-1', title: '불고기', content: '불고기 기억' }],
+      memories: [
+        {
+          id: 'memory-1',
+          title: '불고기',
+          content: '불고기 기억',
+          tags: ['sensitive'],
+        },
+      ],
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
