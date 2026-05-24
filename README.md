@@ -84,15 +84,16 @@ not keep a copied data file in this repository. Re-running the import updates
 existing memories matched by legacy tag or by `title + memoryType`, and creates
 new memories for unmatched rows.
 
-As of 2026-05-24, the AI repository `main` branch still exposes 44 memories in
-both `data/memories.json` and `backend_memory/memory_import.json`. When the AI
-repository updates those files to the ver4 72-memory dataset, rerun the import
-against the deployed backend.
+The ver4 import contract expects 72 manually curated `LONG_TERM` memories.
+Memory tags are pass-through metadata for the AI prompt; the backend does not
+apply a separate search policy for `sensitive`. The import script rejects
+non-ver4 payloads by default:
 
-The import script sends only the backend memory fields used by the current
-contract. `confidenceScore` in a source file is ignored for long-term import
-payloads because manually curated long-term memories do not need an explicit
-confidence score.
+- exactly 72 memories unless `MEMORY_IMPORT_EXPECTED_COUNT` is overridden
+- no `confidenceScore` field
+- tags must be non-empty strings when present
+
+Set `MEMORY_IMPORT_STRICT_VER4=false` only for an explicit legacy import test.
 
 ```bash
 ADMIN_PASSWORD=... GITHUB_TOKEN=... npm run import:memories
