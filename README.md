@@ -72,34 +72,28 @@ npm run migration:revert
 
 If you switch to migration-based schema control, set `DB_SYNCHRONIZE=false`.
 
-## Memory import
+## Memory data
 
 Long-term memory source data is owned by the AI repository:
 
 - Source memories: `MediLux-TalkTo/TalkTo_PersonaAI_AI:data/memories.json`
 - Backend import payload: `MediLux-TalkTo/TalkTo_PersonaAI_AI:backend_memory/memory_import.json`
 
-The backend imports the backend payload through the GitHub Contents API and does
-not keep a copied data file in this repository. Re-running the import updates
-existing memories matched by legacy tag or by `title + memoryType`, and creates
-new memories for unmatched rows.
+The backend does not keep a copied memory data file or one-off import script in
+this repository. Current production DB memory state was imported from the AI
+repository payload.
 
 The ver4 import contract expects 72 manually curated `LONG_TERM` memories.
 Memory tags are pass-through metadata for the AI prompt; the backend does not
-apply a separate search policy for `sensitive`. The import script rejects
-non-ver4 payloads by default:
+apply a separate search policy for `sensitive`.
 
-- exactly 72 memories unless `MEMORY_IMPORT_EXPECTED_COUNT` is overridden
-- no `confidenceScore` field
-- tags must be non-empty strings when present
+Production DB check on 2026-05-24:
 
-Set `MEMORY_IMPORT_STRICT_VER4=false` only for an explicit legacy import test.
-
-```bash
-ADMIN_PASSWORD=... GITHUB_TOKEN=... npm run import:memories
-```
-
-Use `IMPORT_DRY_RUN=true` to validate the source without writing to the backend.
+- 72 active `LONG_TERM` memories
+- 19 memories tagged `sensitive`
+- 72 embedding chunks with vectors
+- no `SHORT_TERM` test memories
+- no deployed smoke-test conversations or voice artifacts
 
 ## Deployed smoke test
 
