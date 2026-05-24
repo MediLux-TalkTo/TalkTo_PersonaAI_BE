@@ -31,6 +31,7 @@ Current hosted MVP baseline:
 - Backend memory import payload: AI repository `backend_memory/memory_import.json`
 - Ver4 memory import contract: 72 manually curated `LONG_TERM` memories, no `confidenceScore`, and pass-through string tags
 - The backend stores and forwards memory tags to `/ai/chat`; tag interpretation stays in the AI prompt, not backend search policy
+- Production DB check on 2026-05-24: 72 active `LONG_TERM` memories, 19 `sensitive` tagged memories, 72 embedded chunks, and smoke-test rows removed
 
 ## 2. Product Goal
 
