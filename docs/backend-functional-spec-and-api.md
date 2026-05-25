@@ -160,7 +160,7 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 - `id`
 - `message_id`
 - `user_id`
-- `rating` enum: `UP`, `DOWN`
+- `rating` enum: `UP`, `NEUTRAL`, `DOWN`
 - `tags` JSON array
 - `comment` nullable
 - `created_at`
@@ -534,6 +534,8 @@ Request:
 }
 ```
 
+`rating: "NEUTRAL"` is used for the normal/average feedback option such as `보통이에요`.
+
 ### 8.11 GET `/api/v1/admin/feedback/negative-summary`
 
 Response item:
@@ -582,6 +584,7 @@ Response:
     "messages_total": 642,
     "voice_messages_total": 204,
     "feedback_positive_ratio": 0.83,
+    "feedback_neutral_ratio": 0,
     "feedback_negative_ratio": 0.17
   }
 }

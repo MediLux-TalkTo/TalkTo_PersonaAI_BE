@@ -36,6 +36,7 @@ export class AdminService {
       messagesTotal,
       voiceMessagesTotal,
       positiveFeedbackCount,
+      neutralFeedbackCount,
       negativeFeedbackCount,
     ] = await Promise.all([
       this.usersRepository.count(),
@@ -43,10 +44,11 @@ export class AdminService {
       this.messagesRepository.count(),
       this.voiceArtifactsRepository.count(),
       this.feedbackRepository.count({ where: { rating: FeedbackRating.UP } }),
+      this.feedbackRepository.count({ where: { rating: FeedbackRating.NEUTRAL } }),
       this.feedbackRepository.count({ where: { rating: FeedbackRating.DOWN } }),
     ]);
 
-    const feedbackTotal = positiveFeedbackCount + negativeFeedbackCount;
+    const feedbackTotal = positiveFeedbackCount + neutralFeedbackCount + negativeFeedbackCount;
 
     return {
       usersTotal,
@@ -55,6 +57,8 @@ export class AdminService {
       voiceMessagesTotal,
       feedbackPositiveRatio:
         feedbackTotal === 0 ? 0 : positiveFeedbackCount / feedbackTotal,
+      feedbackNeutralRatio:
+        feedbackTotal === 0 ? 0 : neutralFeedbackCount / feedbackTotal,
       feedbackNegativeRatio:
         feedbackTotal === 0 ? 0 : negativeFeedbackCount / feedbackTotal,
     };

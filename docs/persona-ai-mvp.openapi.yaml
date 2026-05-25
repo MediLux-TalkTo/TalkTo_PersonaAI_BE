@@ -375,7 +375,7 @@ paths:
           name: rating
           schema:
             type: string
-            enum: [UP, DOWN]
+            enum: [UP, NEUTRAL, DOWN]
         - in: query
           name: limit
           schema:
@@ -592,7 +592,7 @@ components:
       properties:
         rating:
           type: string
-          enum: [UP, DOWN]
+          enum: [UP, NEUTRAL, DOWN]
         tags:
           type: array
           items:

@@ -18,19 +18,27 @@ describe('AdminService', () => {
   });
 
   let service: AdminService;
+  let usersRepository: ReturnType<typeof repository>;
+  let conversationsRepository: ReturnType<typeof repository>;
+  let messagesRepository: ReturnType<typeof repository>;
+  let voiceArtifactsRepository: ReturnType<typeof repository>;
   let feedbackRepository: ReturnType<typeof repository>;
 
   beforeEach(async () => {
+    usersRepository = repository();
+    conversationsRepository = repository();
+    messagesRepository = repository();
+    voiceArtifactsRepository = repository();
     feedbackRepository = repository();
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AdminService,
         { provide: getRepositoryToken(SystemLog), useValue: repository() },
-        { provide: getRepositoryToken(User), useValue: repository() },
-        { provide: getRepositoryToken(Conversation), useValue: repository() },
-        { provide: getRepositoryToken(Message), useValue: repository() },
-        { provide: getRepositoryToken(VoiceArtifact), useValue: repository() },
+        { provide: getRepositoryToken(User), useValue: usersRepository },
+        { provide: getRepositoryToken(Conversation), useValue: conversationsRepository },
+        { provide: getRepositoryToken(Message), useValue: messagesRepository },
+        { provide: getRepositoryToken(VoiceArtifact), useValue: voiceArtifactsRepository },
         { provide: getRepositoryToken(Feedback), useValue: feedbackRepository },
       ],
     }).compile();
@@ -58,6 +66,36 @@ describe('AdminService', () => {
       where: {
         rating: FeedbackRating.DOWN,
       },
+    });
+  });
+
+  it('includes neutral feedback in overview ratios', async () => {
+    usersRepository.count.mockResolvedValue(10);
+    conversationsRepository.count.mockResolvedValue(20);
+    messagesRepository.count.mockResolvedValue(30);
+    voiceArtifactsRepository.count.mockResolvedValue(40);
+    feedbackRepository.count
+      .mockResolvedValueOnce(8)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(2);
+
+    await expect(service.getMetricsOverview()).resolves.toMatchObject({
+      usersTotal: 10,
+      conversationsTotal: 20,
+      messagesTotal: 30,
+      voiceMessagesTotal: 40,
+      feedbackPositiveRatio: 8 / 12,
+      feedbackNeutralRatio: 2 / 12,
+      feedbackNegativeRatio: 2 / 12,
+    });
+    expect(feedbackRepository.count).toHaveBeenNthCalledWith(1, {
+      where: { rating: FeedbackRating.UP },
+    });
+    expect(feedbackRepository.count).toHaveBeenNthCalledWith(2, {
+      where: { rating: FeedbackRating.NEUTRAL },
+    });
+    expect(feedbackRepository.count).toHaveBeenNthCalledWith(3, {
+      where: { rating: FeedbackRating.DOWN },
     });
   });
 

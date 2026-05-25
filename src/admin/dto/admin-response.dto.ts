@@ -79,6 +79,9 @@ export class MetricsOverviewDto {
   @ApiProperty({ example: 0.83 })
   feedbackPositiveRatio: number;
 
+  @ApiProperty({ example: 0 })
+  feedbackNeutralRatio: number;
+
   @ApiProperty({ example: 0.17 })
   feedbackNegativeRatio: number;
 }
