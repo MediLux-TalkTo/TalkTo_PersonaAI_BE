@@ -158,7 +158,7 @@ export class ConversationsService {
       };
     });
 
-    await this.extractShortTermMemory({
+    this.queueShortTermMemoryExtraction({
       userId: actor.userId,
       conversationId,
       history,
@@ -257,7 +257,7 @@ export class ConversationsService {
         };
       });
 
-      await this.extractShortTermMemory({
+      this.queueShortTermMemoryExtraction({
         userId: actor.userId,
         conversationId,
         history,
@@ -482,6 +482,18 @@ export class ConversationsService {
         },
       });
     }
+  }
+
+  private queueShortTermMemoryExtraction(params: {
+    userId: string;
+    conversationId: string;
+    history: AiChatHistoryItem[];
+    userMessage: string;
+    assistantMessage: string;
+  }): void {
+    setImmediate(() => {
+      void this.extractShortTermMemory(params);
+    });
   }
 
 }

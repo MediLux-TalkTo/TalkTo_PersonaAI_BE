@@ -32,9 +32,9 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - admin user invitation and management
 - active persona API and admin update
 - conversation creation, listing, detail, text message, voice message
-- memory CRUD, soft deactivate, revision log, embedding chunk records
+- memory CRUD, soft deactivate, revision log, embedding chunk records, pgvector-backed retrieval
 - per-message feedback
-- admin metrics and error log APIs
+- admin overview/daily metrics and error log APIs
 - global CORS configuration
 - global rate limiting
 - environment validation on bootstrap
@@ -60,6 +60,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - Voice STT can use the AI server when configured; TTS audio can use local storage or Cloudflare R2
 - Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
 - AI chat requests forward memory `tags` to the AI server. The backend stores and passes tags through; tag interpretation such as `sensitive` is handled by the AI prompt.
+- Short-term memory extraction is queued after text/voice responses are saved so it does not block the user-facing reply.
 
 ## Migration commands
 

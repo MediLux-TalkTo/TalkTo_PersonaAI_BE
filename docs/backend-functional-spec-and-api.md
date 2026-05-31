@@ -314,6 +314,7 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Feedback | GET | `/api/v1/admin/feedback/negative-summary` | Negative feedback tag summary | Admin |
 | Feedback | GET | `/api/v1/admin/feedback/reviews` | Feedback review queue | Admin |
 | Admin | GET | `/api/v1/admin/metrics/overview` | Usage overview | Admin |
+| Admin | GET | `/api/v1/admin/metrics/daily` | Recent 14-day KST dashboard metrics | Admin |
 | Admin | GET | `/api/v1/admin/logs/errors` | Error logs | Admin |
 
 ## 8. Endpoint Details
@@ -590,7 +591,38 @@ Response:
 }
 ```
 
-### 8.14 GET `/api/v1/admin/logs/errors`
+### 8.14 GET `/api/v1/admin/metrics/daily`
+
+Returns the latest 14 calendar days grouped by KST (`Asia/Seoul`) to avoid UTC midnight boundary drift in the dashboard.
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "timeZone": "Asia/Seoul",
+    "days": 14,
+    "items": [
+      {
+        "date": "2026-05-31",
+        "newUsers": 3,
+        "conversationSessions": 12,
+        "messages": 84,
+        "voiceMessages": 18,
+        "assistantMessages": 42,
+        "feedbackPositive": 10,
+        "feedbackNeutral": 2,
+        "feedbackNegative": 1,
+        "feedbackTotal": 13,
+        "feedbackResponseRate": 0.31
+      }
+    ]
+  }
+}
+```
+
+### 8.15 GET `/api/v1/admin/logs/errors`
 
 Query:
 
@@ -619,11 +651,13 @@ Query:
 - System logs must include request tracing identifiers
 - Memory changes must be auditable
 - API timestamps use ISO 8601 UTC
+- Admin daily metrics group by KST calendar day (`Asia/Seoul`)
+- Short-term memory extraction runs after text/voice response persistence in a background task
 
 ## 11. Open Questions
 
 - Whether past TTS playback must support signed URL reissue after URL expiry
-- Whether memory search should move from `float8[]` + TypeScript cosine similarity to pgvector DB search
+- Whether to tune pgvector ivfflat list/probe settings after memory volume grows
 - Whether operational error tracking stays in `SystemLog` only or adds an external tool
 - Authentication/invitation policy for password reset and refresh-token operations
 - Whether the admin dashboard needs KPIs beyond metrics overview, negative feedback summary, and feedback reviews
@@ -637,5 +671,5 @@ Implemented MVP baseline:
 3. Conversation, message, feedback, memory, and revision persistence
 4. Text chat with AI `/ai/embed` and `/ai/chat`
 5. Voice flow with AI STT/chat/TTS orchestration and R2-capable TTS storage
-6. Admin metrics, negative feedback summary, review queue, and error log APIs
+6. Admin overview/daily metrics, negative feedback summary, review queue, and error log APIs
 7. Render + Neon deployed smoke path for BE/DB verification

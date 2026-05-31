@@ -189,7 +189,46 @@ export class MemoriesService {
       );
     }
 
-    await this.embeddingsRepository.save(embeddings);
+    const savedEmbeddings = await this.embeddingsRepository.save(embeddings);
+    await this.syncEmbeddingVectors(savedEmbeddings, memory.id);
+  }
+
+  private async syncEmbeddingVectors(
+    embeddings: MemoryEmbedding[],
+    memoryId: string,
+  ): Promise<void> {
+    const vectorUpdates = embeddings.filter((embedding) => embedding.embedding);
+
+    if (vectorUpdates.length === 0) {
+      return;
+    }
+
+    try {
+      for (const embedding of vectorUpdates) {
+        await this.embeddingsRepository.query(
+          `
+            UPDATE "memory_embeddings"
+            SET "embeddingVector" = $1::vector
+            WHERE "id" = $2
+          `,
+          [this.toVectorLiteral(embedding.embedding ?? []), embedding.id],
+        );
+      }
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.MEMORY,
+        severity: SystemLogSeverity.WARN,
+        detail: {
+          reason: 'memory_embedding_vector_sync_failed',
+          memoryId,
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+    }
+  }
+
+  private toVectorLiteral(vector: number[]): string {
+    return `[${vector.join(',')}]`;
   }
 
   private chunkMarkdown(markdown: string): string[] {

@@ -73,6 +73,65 @@ export class MemoryRetrievalService {
       return [];
     }
 
+    const pgvectorMatches = await this.retrieveByPgvector(queryEmbedding);
+
+    if (pgvectorMatches.length > 0) {
+      return pgvectorMatches;
+    }
+
+    return this.retrieveByApplicationCosine(queryEmbedding);
+  }
+
+  private async retrieveByPgvector(queryEmbedding: number[]): Promise<Memory[]> {
+    const vectorLiteral = this.toVectorLiteral(queryEmbedding);
+
+    if (!vectorLiteral) {
+      return [];
+    }
+
+    try {
+      const rows = await this.memoryEmbeddingsRepository.query(
+        `
+          WITH ranked_memories AS (
+            SELECT
+              m.*,
+              me."embeddingVector" <=> $1::vector AS distance,
+              row_number() OVER (
+                PARTITION BY m."id"
+                ORDER BY me."embeddingVector" <=> $1::vector
+              ) AS rank
+            FROM "memory_embeddings" me
+            INNER JOIN "memories" m ON m."id" = me."memoryId"
+            WHERE m."status" = $2
+              AND me."embeddingVector" IS NOT NULL
+          )
+          SELECT *
+          FROM ranked_memories
+          WHERE rank = 1
+          ORDER BY distance ASC
+          LIMIT 3
+        `,
+        [vectorLiteral, MemoryStatus.ACTIVE],
+      );
+
+      return rows.map((row: Record<string, unknown>) =>
+        this.memoriesRepository.create(row as Partial<Memory>),
+      );
+    } catch (error) {
+      await this.adminService.recordLog({
+        category: SystemLogCategory.MEMORY,
+        severity: SystemLogSeverity.WARN,
+        detail: {
+          reason: 'pgvector_memory_search_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        },
+      });
+
+      return [];
+    }
+  }
+
+  private async retrieveByApplicationCosine(queryEmbedding: number[]): Promise<Memory[]> {
     const embeddings = await this.memoryEmbeddingsRepository.find({
       where: {
         memory: {
@@ -104,6 +163,14 @@ export class MemoryRetrievalService {
       .sort((left, right) => right.score - left.score)
       .slice(0, 3)
       .map(({ memory }) => memory);
+  }
+
+  private toVectorLiteral(vector: number[]): string | null {
+    if (vector.length === 0 || vector.some((value) => !Number.isFinite(value))) {
+      return null;
+    }
+
+    return `[${vector.join(',')}]`;
   }
 
   private cosineSimilarity(left: number[], right: number[]): number {

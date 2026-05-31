@@ -392,6 +392,14 @@ paths:
       responses:
         '200':
           description: Metrics overview
+  /api/v1/admin/metrics/daily:
+    get:
+      tags: [Admin]
+      summary: Get recent daily metrics
+      description: Returns the latest 14 KST calendar days for dashboard charts.
+      responses:
+        '200':
+          description: Daily metrics
   /api/v1/admin/logs/errors:
     get:
       tags: [Admin]

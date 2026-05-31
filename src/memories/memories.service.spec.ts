@@ -15,6 +15,7 @@ describe('MemoriesService', () => {
     delete: jest.fn(),
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
+    query: jest.fn(),
     save: jest.fn(async (value) => value),
   });
 
@@ -44,6 +45,11 @@ describe('MemoriesService', () => {
     memoriesRepository = repository();
     revisionsRepository = repository();
     embeddingsRepository = repository();
+    embeddingsRepository.save.mockImplementation(async (value) =>
+      Array.isArray(value)
+        ? value.map((item, index) => ({ ...item, id: `embedding-${index}` }))
+        : { ...value, id: 'embedding-0' },
+    );
     aiClientService = {
       embed: jest.fn().mockResolvedValue([0.1, 0.2]),
     };
@@ -84,6 +90,10 @@ describe('MemoriesService', () => {
 
     expect(embeddingsRepository.delete).toHaveBeenCalledWith({ memoryId: 'memory-id' });
     expect(aiClientService.embed).toHaveBeenCalledWith('새 불고기 기억');
+    expect(embeddingsRepository.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET "embeddingVector" = $1::vector'),
+      ['[0.1,0.2]', 'embedding-0'],
+    );
   });
 
   it('filters related people with the array contains operator', async () => {

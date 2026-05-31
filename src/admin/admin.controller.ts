@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { success } from '../common/utils/api-response';
 import {
+  DailyMetricsResponseDto,
   FeedbackReviewListResponseDto,
   MetricsOverviewResponseDto,
   NegativeFeedbackSummaryResponseDto,
@@ -33,6 +34,13 @@ export class AdminController {
   @ApiOkResponse({ type: MetricsOverviewResponseDto })
   async getMetricsOverview() {
     return success(await this.adminService.getMetricsOverview());
+  }
+
+  @Get('metrics/daily')
+  @ApiOperation({ summary: '관리자 대시보드 최근 14일 일별 지표 조회' })
+  @ApiOkResponse({ type: DailyMetricsResponseDto })
+  async getDailyMetrics() {
+    return success(await this.adminService.getDailyMetrics());
   }
 
   @Get('feedback/negative-summary')

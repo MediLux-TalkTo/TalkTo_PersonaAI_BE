@@ -1,6 +1,8 @@
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
 import { FeedbackRating } from '../common/enums/feedback.enum';
+import { MessageInputMode, MessageSenderType } from '../common/enums/message.enums';
 import { Conversation } from '../conversations/conversation.entity';
 import { Message } from '../conversations/message.entity';
 import { VoiceArtifact } from '../conversations/voice-artifact.entity';
@@ -23,8 +25,12 @@ describe('AdminService', () => {
   let messagesRepository: ReturnType<typeof repository>;
   let voiceArtifactsRepository: ReturnType<typeof repository>;
   let feedbackRepository: ReturnType<typeof repository>;
+  let dataSource: { query: jest.Mock };
 
   beforeEach(async () => {
+    dataSource = {
+      query: jest.fn(),
+    };
     usersRepository = repository();
     conversationsRepository = repository();
     messagesRepository = repository();
@@ -34,6 +40,7 @@ describe('AdminService', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AdminService,
+        { provide: DataSource, useValue: dataSource },
         { provide: getRepositoryToken(SystemLog), useValue: repository() },
         { provide: getRepositoryToken(User), useValue: usersRepository },
         { provide: getRepositoryToken(Conversation), useValue: conversationsRepository },
@@ -44,6 +51,77 @@ describe('AdminService', () => {
     }).compile();
 
     service = moduleRef.get(AdminService);
+  });
+
+  it('returns recent daily metrics in KST with feedback response rate', async () => {
+    dataSource.query.mockResolvedValue([
+      {
+        date: '2026-05-30',
+        new_users: '1',
+        conversation_sessions: '2',
+        messages: '9',
+        voice_messages: '3',
+        assistant_messages: '4',
+        feedback_positive: '2',
+        feedback_neutral: '1',
+        feedback_negative: '1',
+        feedback_total: '4',
+      },
+      {
+        date: '2026-05-31',
+        new_users: '0',
+        conversation_sessions: '1',
+        messages: '2',
+        voice_messages: '0',
+        assistant_messages: '0',
+        feedback_positive: '0',
+        feedback_neutral: '0',
+        feedback_negative: '0',
+        feedback_total: '0',
+      },
+    ]);
+
+    await expect(service.getDailyMetrics()).resolves.toEqual({
+      timeZone: 'Asia/Seoul',
+      days: 14,
+      items: [
+        {
+          date: '2026-05-30',
+          newUsers: 1,
+          conversationSessions: 2,
+          messages: 9,
+          voiceMessages: 3,
+          assistantMessages: 4,
+          feedbackPositive: 2,
+          feedbackNeutral: 1,
+          feedbackNegative: 1,
+          feedbackTotal: 4,
+          feedbackResponseRate: 1,
+        },
+        {
+          date: '2026-05-31',
+          newUsers: 0,
+          conversationSessions: 1,
+          messages: 2,
+          voiceMessages: 0,
+          assistantMessages: 0,
+          feedbackPositive: 0,
+          feedbackNeutral: 0,
+          feedbackNegative: 0,
+          feedbackTotal: 0,
+          feedbackResponseRate: 0,
+        },
+      ],
+    });
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining('timezone($1'), [
+      'Asia/Seoul',
+      14,
+      MessageInputMode.VOICE,
+      MessageSenderType.ASSISTANT,
+      FeedbackRating.UP,
+      FeedbackRating.NEUTRAL,
+      FeedbackRating.DOWN,
+    ]);
   });
 
   it('counts negative feedback by tag sorted by count', async () => {

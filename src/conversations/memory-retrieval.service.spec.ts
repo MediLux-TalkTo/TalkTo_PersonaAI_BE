@@ -9,7 +9,9 @@ import { MemoryRetrievalService } from './memory-retrieval.service';
 
 describe('MemoryRetrievalService', () => {
   const repository = () => ({
+    create: jest.fn((value) => value),
     find: jest.fn().mockResolvedValue([]),
+    query: jest.fn().mockResolvedValue([]),
   });
 
   let service: MemoryRetrievalService;
@@ -62,6 +64,19 @@ describe('MemoryRetrievalService', () => {
       weakerMemory,
     ]);
     expect(memoriesRepository.find).not.toHaveBeenCalled();
+  });
+
+  it('uses pgvector matches before loading embeddings into application memory', async () => {
+    const pgvectorMemory = { id: 'memory-pgvector', title: '불고기' } as Memory;
+    aiClientService.embed.mockResolvedValue([1, 0]);
+    memoryEmbeddingsRepository.query.mockResolvedValue([pgvectorMemory]);
+
+    await expect(service.retrieve('불고기')).resolves.toEqual([pgvectorMemory]);
+    expect(memoryEmbeddingsRepository.query).toHaveBeenCalledWith(
+      expect.stringContaining('"embeddingVector" <=> $1::vector'),
+      ['[1,0]', MemoryStatus.ACTIVE],
+    );
+    expect(memoryEmbeddingsRepository.find).not.toHaveBeenCalled();
   });
 
   it('falls back to keyword retrieval when query embedding fails', async () => {

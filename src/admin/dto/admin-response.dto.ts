@@ -97,6 +97,63 @@ export class MetricsOverviewResponseDto {
   meta: ApiMetaDto;
 }
 
+export class DailyMetricsItemDto {
+  @ApiProperty({ example: '2026-05-31' })
+  date: string;
+
+  @ApiProperty({ example: 3 })
+  newUsers: number;
+
+  @ApiProperty({ example: 12 })
+  conversationSessions: number;
+
+  @ApiProperty({ example: 84 })
+  messages: number;
+
+  @ApiProperty({ example: 18 })
+  voiceMessages: number;
+
+  @ApiProperty({ example: 42 })
+  assistantMessages: number;
+
+  @ApiProperty({ example: 10 })
+  feedbackPositive: number;
+
+  @ApiProperty({ example: 2 })
+  feedbackNeutral: number;
+
+  @ApiProperty({ example: 1 })
+  feedbackNegative: number;
+
+  @ApiProperty({ example: 13 })
+  feedbackTotal: number;
+
+  @ApiProperty({ example: 0.31 })
+  feedbackResponseRate: number;
+}
+
+export class DailyMetricsDto {
+  @ApiProperty({ example: 'Asia/Seoul' })
+  timeZone: string;
+
+  @ApiProperty({ example: 14 })
+  days: number;
+
+  @ApiProperty({ type: [DailyMetricsItemDto] })
+  items: DailyMetricsItemDto[];
+}
+
+export class DailyMetricsResponseDto {
+  @ApiProperty({ example: true })
+  success: boolean;
+
+  @ApiProperty({ type: DailyMetricsDto })
+  data: DailyMetricsDto;
+
+  @ApiProperty({ type: ApiMetaDto })
+  meta: ApiMetaDto;
+}
+
 export class SystemLogDto {
   @ApiProperty({ example: 'log-001' })
   id: string;
