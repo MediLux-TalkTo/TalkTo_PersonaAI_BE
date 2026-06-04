@@ -1,0 +1,62 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+
+export class CreateRecordingUploadIntentDto {
+  @ApiProperty({ example: 'subject-uuid' })
+  @IsUUID()
+  subjectId: string;
+
+  @ApiProperty({ example: 'call-recording.m4a', maxLength: 255 })
+  @IsString()
+  @MaxLength(255)
+  originalFilename: string;
+
+  @ApiProperty({ example: 'audio/mp4', maxLength: 120 })
+  @IsString()
+  @MaxLength(120)
+  mimeType: string;
+
+  @ApiProperty({ example: 10485760, minimum: 1 })
+  @IsInt()
+  @Min(1)
+  fileSizeBytes: number;
+
+  @ApiPropertyOptional({ example: 420, minimum: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(60 * 60 * 8)
+  durationSeconds?: number;
+
+  @ApiPropertyOptional({ example: '엄마와 저녁 통화' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  memo?: string;
+
+  @ApiPropertyOptional({ example: 'childhood-food' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  relatedQuestionId?: string;
+
+  @ApiPropertyOptional({ example: '어릴 때 제일 좋아했던 음식은 뭐였어요?' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  relatedQuestionText?: string;
+
+  @ApiPropertyOptional({ example: 'sha256:abc...' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  fileHash?: string;
+}

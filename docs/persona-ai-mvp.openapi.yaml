@@ -11,6 +11,9 @@ servers:
 tags:
   - name: Auth
   - name: Consent
+  - name: Subjects
+  - name: Question Cards
+  - name: Recordings
   - name: Persona
   - name: Conversations
   - name: Memories
@@ -100,6 +103,95 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PersonaResponse'
+  /api/v1/subjects:
+    post:
+      tags: [Subjects]
+      summary: Create archive subject profile
+      responses:
+        '201':
+          description: Subject created
+    get:
+      tags: [Subjects]
+      summary: List my subjects
+      responses:
+        '200':
+          description: Subject list
+  /api/v1/subjects/{subjectId}:
+    get:
+      tags: [Subjects]
+      summary: Get subject detail
+      responses:
+        '200':
+          description: Subject detail
+    patch:
+      tags: [Subjects]
+      summary: Update subject profile
+      responses:
+        '200':
+          description: Subject updated
+  /api/v1/subjects/{subjectId}/glossary:
+    post:
+      tags: [Subjects]
+      summary: Add family glossary term
+      responses:
+        '201':
+          description: Glossary term added
+  /api/v1/subjects/{subjectId}/glossary/{termId}:
+    delete:
+      tags: [Subjects]
+      summary: Delete family glossary term
+      responses:
+        '200':
+          description: Glossary term deleted
+  /api/v1/question-cards:
+    get:
+      tags: [Question Cards]
+      summary: List default question cards
+      responses:
+        '200':
+          description: Question card list
+  /api/v1/subjects/{subjectId}/question-interactions:
+    post:
+      tags: [Question Cards]
+      summary: Record question completion, skip, view, or custom question
+      responses:
+        '201':
+          description: Question interaction recorded
+  /api/v1/recordings/upload-intent:
+    post:
+      tags: [Recordings]
+      summary: Create recording upload intent
+      responses:
+        '201':
+          description: Recording upload intent created
+  /api/v1/recordings/{recordingId}/complete:
+    post:
+      tags: [Recordings]
+      summary: Mark recording upload complete
+      responses:
+        '200':
+          description: Recording upload completed
+  /api/v1/subjects/{subjectId}/recordings:
+    get:
+      tags: [Recordings]
+      summary: List subject recordings
+      responses:
+        '200':
+          description: Recording list
+  /api/v1/recordings/{recordingId}:
+    get:
+      tags: [Recordings]
+      summary: Get recording detail
+      responses:
+        '200':
+          description: Recording detail
+  /api/v1/recordings/{recordingId}/playback-url:
+    post:
+      tags: [Recordings]
+      summary: Issue expiring original recording playback URL
+      responses:
+        '200':
+          description: Playback URL issued
   /api/v1/conversations:
     post:
       tags: [Conversations]

@@ -13,6 +13,9 @@ import { PersonasModule } from './personas/personas.module';
 import { UsersModule } from './users/users.module';
 import { MemoriesModule } from './memories/memories.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { QuestionsModule } from './questions/questions.module';
+import { RecordingsModule } from './recordings/recordings.module';
+import { SubjectsModule } from './subjects/subjects.module';
 import { buildTypeOrmOptions } from './database/typeorm.config';
 import { validateEnv } from './config/env.validation';
 import { User } from './users/user.entity';
@@ -43,6 +46,9 @@ import { Persona } from './personas/persona.entity';
     HealthModule,
     MemoriesModule,
     PersonasModule,
+    QuestionsModule,
+    RecordingsModule,
+    SubjectsModule,
     UsersModule,
   ],
   providers: [

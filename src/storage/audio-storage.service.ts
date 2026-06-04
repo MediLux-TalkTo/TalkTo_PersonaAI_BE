@@ -16,6 +16,13 @@ export interface StoredAudio {
   expiresAt: Date | null;
 }
 
+export interface UploadIntent {
+  storageKey: string;
+  uploadUrl: string;
+  expiresAt: Date;
+  method: 'PUT';
+}
+
 @Injectable()
 export class AudioStorageService {
   constructor(private readonly configService: ConfigService) {}
@@ -36,6 +43,78 @@ export class AudioStorageService {
     }
 
     throw new Error(`Unsupported audio storage driver: ${driver}.`);
+  }
+
+  async createUploadIntent(params: {
+    ownerUserId: string;
+    subjectId: string;
+    recordingId: string;
+    filename: string;
+    contentType: string;
+  }): Promise<UploadIntent> {
+    const driver = this.configService.get<string>('AUDIO_STORAGE_DRIVER') ?? 'local';
+    const ttlSeconds =
+      this.configService.get<number>('AUDIO_SIGNED_URL_TTL_SECONDS') ?? 3600;
+    const storageKey = this.buildRecordingStorageKey(params);
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+    if (driver === 'r2') {
+      const s3 = this.buildR2Client();
+      const uploadUrl = await getSignedUrl(
+        s3,
+        new PutObjectCommand({
+          Bucket: this.requiredConfig('R2_BUCKET_NAME'),
+          Key: storageKey,
+          ContentType: params.contentType,
+        }),
+        { expiresIn: ttlSeconds },
+      );
+
+      return {
+        storageKey,
+        uploadUrl,
+        expiresAt,
+        method: 'PUT',
+      };
+    }
+
+    return {
+      storageKey,
+      uploadUrl: `local-upload://${storageKey}`,
+      expiresAt,
+      method: 'PUT',
+    };
+  }
+
+  async createPlaybackUrl(storageKey: string): Promise<{
+    playbackUrl: string;
+    expiresAt: Date;
+  }> {
+    const driver = this.configService.get<string>('AUDIO_STORAGE_DRIVER') ?? 'local';
+    const ttlSeconds =
+      this.configService.get<number>('AUDIO_SIGNED_URL_TTL_SECONDS') ?? 3600;
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+    if (driver === 'r2') {
+      const s3 = this.buildR2Client();
+      const playbackUrl = await getSignedUrl(
+        s3,
+        new GetObjectCommand({
+          Bucket: this.requiredConfig('R2_BUCKET_NAME'),
+          Key: storageKey,
+        }),
+        { expiresIn: ttlSeconds },
+      );
+
+      return { playbackUrl, expiresAt };
+    }
+
+    const publicPath =
+      this.configService.get<string>('LOCAL_AUDIO_PUBLIC_PATH') ?? '/audio';
+    return {
+      playbackUrl: `${this.normalizePublicPath(publicPath)}/${storageKey}`,
+      expiresAt,
+    };
   }
 
   private async saveLocalMp3(params: {
@@ -129,6 +208,22 @@ export class AudioStorageService {
       safeConversationId,
       filename: `${safeMessageId}-${randomUUID()}${extname('tts.mp3')}`,
     };
+  }
+
+  private buildRecordingStorageKey(params: {
+    ownerUserId: string;
+    subjectId: string;
+    recordingId: string;
+    filename: string;
+  }) {
+    const extension = extname(params.filename).toLowerCase() || '.audio';
+
+    return [
+      'recordings',
+      this.safeSegment(params.ownerUserId),
+      this.safeSegment(params.subjectId),
+      `${this.safeSegment(params.recordingId)}${extension}`,
+    ].join('/');
   }
 
   private requiredConfig(key: string): string {

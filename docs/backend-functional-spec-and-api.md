@@ -298,6 +298,19 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Users | PATCH | `/api/v1/admin/users/{userId}` | Update user status or role | Admin |
 | Persona | GET | `/api/v1/personas/active` | Get active persona | User |
 | Persona | PATCH | `/api/v1/admin/personas/{personaId}` | Update persona metadata | Admin |
+| Subjects | POST | `/api/v1/subjects` | Create archive subject profile | User |
+| Subjects | GET | `/api/v1/subjects` | List my subjects | User |
+| Subjects | GET | `/api/v1/subjects/{subjectId}` | Get subject detail | User |
+| Subjects | PATCH | `/api/v1/subjects/{subjectId}` | Update subject profile | User |
+| Subjects | POST | `/api/v1/subjects/{subjectId}/glossary` | Add family glossary term | User |
+| Subjects | DELETE | `/api/v1/subjects/{subjectId}/glossary/{termId}` | Delete family glossary term | User |
+| Questions | GET | `/api/v1/question-cards` | List default question cards | User |
+| Questions | POST | `/api/v1/subjects/{subjectId}/question-interactions` | Record question completion/skip/custom item | User |
+| Recordings | POST | `/api/v1/recordings/upload-intent` | Create recording upload intent | User |
+| Recordings | POST | `/api/v1/recordings/{recordingId}/complete` | Mark recording upload complete | User |
+| Recordings | GET | `/api/v1/subjects/{subjectId}/recordings` | List subject recordings | User |
+| Recordings | GET | `/api/v1/recordings/{recordingId}` | Get recording detail | User |
+| Recordings | POST | `/api/v1/recordings/{recordingId}/playback-url` | Issue expiring recording playback URL | User |
 | Conversations | POST | `/api/v1/conversations` | Create conversation | User |
 | Conversations | GET | `/api/v1/conversations` | List my conversations | User |
 | Conversations | GET | `/api/v1/conversations/{conversationId}` | Get conversation detail | User |
@@ -318,6 +331,28 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Admin | GET | `/api/v1/admin/logs/errors` | Error logs | Admin |
 
 ## 8. Endpoint Details
+
+### 8.0 Archive-First APIs
+
+The Archive-first expansion from the 2026-06-02 feature spec is represented by subject, question, and recording APIs.
+
+- Subject profiles store the family target person, relationship, life status, region/dialect hints, and notes.
+- Family glossary terms store names, nicknames, places, and phrases that can later improve STT post-processing.
+- Question cards are fixed backend-provided prompts; interactions record completed, skipped, viewed, or custom questions.
+- Recording upload intent creates a `recordings` row and a presigned PUT URL for direct object storage upload.
+- Recording completion marks `uploadStatus=UPLOADED`; AI preview/full analysis workers are not started in this backend slice.
+- Recording playback issues a separate expiring URL only after ownership and upload status checks.
+
+Supported recording MIME types:
+
+- `audio/aac`
+- `audio/amr`
+- `audio/m4a`
+- `audio/mp4`
+- `audio/mpeg`
+- `audio/wav`
+- `audio/x-m4a`
+- `audio/x-wav`
 
 ### 8.1 POST `/api/v1/auth/login`
 
@@ -673,3 +708,4 @@ Implemented MVP baseline:
 5. Voice flow with AI STT/chat/TTS orchestration and R2-capable TTS storage
 6. Admin overview/daily metrics, negative feedback summary, review queue, and error log APIs
 7. Render + Neon deployed smoke path for BE/DB verification
+8. Archive subject, question card, recording upload intent, recording archive, and original recording playback URL APIs

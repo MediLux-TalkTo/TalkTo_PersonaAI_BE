@@ -29,6 +29,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 
 - JWT auth with access/refresh tokens
 - consent persistence
+- Archive-first subject profiles, family glossary terms, question cards, recording upload intents, and recording archive APIs
 - admin user invitation and management
 - active persona API and admin update
 - conversation creation, listing, detail, text message, voice message
@@ -49,6 +50,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - AI server: `https://talkto-persona-ai.onrender.com`
 - Production database: Neon PostgreSQL
 - Voice TTS storage: private Cloudflare R2 bucket with signed playback URLs
+- Archive recording storage: private Cloudflare R2 bucket with presigned upload and playback URLs
 - Imported long-term memories: 72 active `LONG_TERM` memories from the AI repository payload
 
 ## Notes
@@ -58,6 +60,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - If `AI_SERVER_URL` is unset, chat and embedding flows keep using local fallback behavior
 - Set `AI_SERVER_TOKEN` only after the AI server enables the same shared secret; it is sent as `X-AI-Server-Token`
 - Voice STT can use the AI server when configured; TTS audio can use local storage or Cloudflare R2
+- Recording upload intents use presigned PUT URLs when `AUDIO_STORAGE_DRIVER=r2`; original recording playback URLs are issued separately and expire
 - Local TTS mp3 files are served from `LOCAL_AUDIO_PUBLIC_PATH` when `AUDIO_STORAGE_DRIVER=local`
 - AI chat requests forward memory `tags` to the AI server. The backend stores and passes tags through; tag interpretation such as `sensitive` is handled by the AI prompt.
 - Short-term memory extraction is queued after text/voice responses are saved so it does not block the user-facing reply.
