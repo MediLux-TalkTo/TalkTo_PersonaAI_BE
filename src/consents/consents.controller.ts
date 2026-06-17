@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -11,11 +11,15 @@ import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decor
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { success } from '../common/utils/api-response';
+import { AcceptConsentsDto } from './dto/accept-consents.dto';
 import { CreateConsentDto } from './dto/create-consent.dto';
 import {
+  AcceptConsentsResponseDto,
   ConsentCreateResponseDto,
+  ConsentRequirementsResponseDto,
   ConsentStatusResponseDto,
 } from './dto/consent-response.dto';
+import { QueryConsentRequirementsDto } from './dto/query-consent-requirements.dto';
 import { ConsentsService } from './consents.service';
 
 @ApiTags('Consent')
@@ -45,6 +49,21 @@ export class ConsentsController {
     });
   }
 
+  @Get('requirements')
+  @ApiOperation({
+    summary: '기능별 동의 requirements 조회',
+    description:
+      'Archive, Memories, Voice Persona 진입 전에 필요한 필수/선택 동의와 현재 상태를 반환합니다.',
+  })
+  @ApiOkResponse({ type: ConsentRequirementsResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true, notFound: true })
+  async getRequirements(
+    @CurrentUser() user: { userId: string },
+    @Query() query: QueryConsentRequirementsDto,
+  ) {
+    return success(await this.consentsService.getRequirements(user.userId, query));
+  }
+
   @Post()
   @ApiOperation({
     summary: '동의 저장',
@@ -56,5 +75,21 @@ export class ConsentsController {
   async create(@CurrentUser() user: { userId: string }, @Body() dto: CreateConsentDto) {
     const consent = await this.consentsService.save(user.userId, dto);
     return success(consent);
+  }
+
+  @Post('accept')
+  @ApiOperation({
+    summary: '기능별 동의 수락',
+    description:
+      'v1.0 MVP의 목적별 consent_type/version을 저장합니다. 기존 /consents 저장 API는 호환을 위해 유지합니다.',
+  })
+  @ApiBody({ type: AcceptConsentsDto })
+  @ApiCreatedResponse({ type: AcceptConsentsResponseDto })
+  @ApiCommonErrorResponses({ badRequest: true, unauthorized: true, notFound: true })
+  async accept(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: AcceptConsentsDto,
+  ) {
+    return success(await this.consentsService.accept(user.userId, dto));
   }
 }

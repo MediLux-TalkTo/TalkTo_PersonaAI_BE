@@ -28,7 +28,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 ## Current implementation scope
 
 - JWT auth with access/refresh tokens
-- consent persistence
+- legacy consent persistence plus v1.0 feature-scoped consent requirements and acceptance
 - Archive-first subject profiles, family glossary terms, question cards, recording upload intents, and recording archive APIs
 - admin user invitation and management
 - active persona API and admin update

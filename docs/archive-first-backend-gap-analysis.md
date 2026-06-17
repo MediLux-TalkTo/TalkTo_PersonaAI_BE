@@ -8,6 +8,11 @@ Source reviewed on 2026-06-05:
 
 ## Implemented In This Backend Slice
 
+- `user_consents`
+  - Preserve legacy boolean consent persistence for the existing login flow.
+  - Store v1.0 purpose/versioned consent rows by `consentType`, `feature`, optional `subjectId`, `status`, and `version`.
+  - Expose feature consent requirements for Archive, Memories, and Voice Persona.
+  - Expose purpose consent acceptance for privacy, audio storage, AI analysis, biometric voice processing, overseas transfer, posthumous use, family reconsent, and optional marketing.
 - `subjects`
   - Create/list/detail/update owned subject profiles.
   - Store `displayName`, `relationship`, `lifeStatus`, `localeHint`, `dialectHint`, and notes.
@@ -27,8 +32,9 @@ Source reviewed on 2026-06-05:
 
 ## Remaining Backend Work
 
-- Consent expansion
-  - Split current consent into purpose/versioned consents: privacy, voice storage, AI analysis, biometric processing, overseas transfer, posthumous use, and R&D opt-in.
+- Consent expansion follow-up
+  - Wire `ConsentsService.assertRequiredConsents` into paid Memories, Voice Persona, and external AI provider entry points as those modules land.
+  - Add consent withdrawal and provider deletion tracking after the P0 deletion/request flow exists.
 - Upload completion verification
   - Optionally verify object existence, size, and checksum before marking upload complete.
 - Preview analysis

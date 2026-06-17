@@ -75,10 +75,17 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 
 - `id`
 - `user_id`
+- `subject_id` nullable
+- `consent_type` nullable for legacy rows
+- `feature` nullable for legacy rows
+- `required`
+- `status` enum: `accepted`, `declined`, `withdrawn`, `expired`
+- `version` nullable
 - `persona_disclaimer_accepted`
 - `conversation_storage_accepted`
 - `voice_synthesis_accepted`
 - `accepted_at`
+- `withdrawn_at` nullable
 
 ### 4.3 Persona
 
@@ -191,6 +198,9 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 - Require consent completion before conversation features become available
 - Save latest consent record per user
 - Expose consent status for frontend gating
+- Expose feature-specific requirements for `archive`, `memories`, and `voice_persona`
+- Save versioned purpose consents for P0 Archive/Memories/Voice Persona gates
+- Return `requires_consent` with missing consent types when a paid or AI feature lacks required consent
 
 ## 5.3 User Management
 
@@ -292,7 +302,9 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Auth | POST | `/api/v1/auth/logout` | Sign out | User |
 | Auth | GET | `/api/v1/auth/me` | Current user profile | User |
 | Consent | GET | `/api/v1/consents/me` | Get consent status | User |
+| Consent | GET | `/api/v1/consents/requirements?feature={feature}&subject_id={subjectId}` | Get feature consent requirements | User |
 | Consent | POST | `/api/v1/consents` | Save consent | User |
+| Consent | POST | `/api/v1/consents/accept` | Accept versioned purpose consents | User |
 | Users | GET | `/api/v1/admin/users` | List users | Admin |
 | Users | POST | `/api/v1/admin/users/invitations` | Invite family user | Admin |
 | Users | PATCH | `/api/v1/admin/users/{userId}` | Update user status or role | Admin |
