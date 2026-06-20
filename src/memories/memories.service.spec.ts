@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ArrayContains } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
+import { ConsentFeature } from '../common/enums/consent.enums';
 import { MemoryStatus } from '../common/enums/memory.enums';
 import { MemoryEmbedding } from './memory-embedding.entity';
 import { MemoryRevision } from './memory-revision.entity';
@@ -24,6 +25,10 @@ describe('MemoriesService', () => {
   let revisionsRepository: ReturnType<typeof repository>;
   let embeddingsRepository: ReturnType<typeof repository>;
   let aiClientService: { embed: jest.Mock };
+  const memoriesConsentContext = {
+    ownerUserId: 'editor-id',
+    feature: ConsentFeature.MEMORIES,
+  };
 
   const memory = (overrides: Partial<Memory> = {}) =>
     ({
@@ -89,7 +94,10 @@ describe('MemoriesService', () => {
     });
 
     expect(embeddingsRepository.delete).toHaveBeenCalledWith({ memoryId: 'memory-id' });
-    expect(aiClientService.embed).toHaveBeenCalledWith('새 불고기 기억');
+    expect(aiClientService.embed).toHaveBeenCalledWith(
+      '새 불고기 기억',
+      memoriesConsentContext,
+    );
     expect(embeddingsRepository.query).toHaveBeenCalledWith(
       expect.stringContaining('SET "embeddingVector" = $1::vector'),
       ['[0.1,0.2]', 'embedding-0'],

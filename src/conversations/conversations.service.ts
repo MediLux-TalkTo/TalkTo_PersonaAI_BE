@@ -5,8 +5,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { AiChatHistoryItem, AiClientService } from '../ai/ai-client.service';
+import {
+  AiChatHistoryItem,
+  AiClientService,
+  AiProviderConsentContext,
+} from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
+import { ConsentFeature } from '../common/enums/consent.enums';
 import {
   SystemLogCategory,
   SystemLogSeverity,
@@ -104,15 +109,23 @@ export class ConversationsService {
     dto: SendTextMessageDto,
   ) {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
+    const memoriesConsentContext = this.buildProviderConsentContext(
+      conversation.userId,
+      ConsentFeature.MEMORIES,
+    );
     const persona = await this.personasService.getActivePersona();
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.memoryRetrievalService.retrieve(dto.content);
+    const relatedMemories = await this.memoryRetrievalService.retrieve(
+      dto.content,
+      memoriesConsentContext,
+    );
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
       userMessage: dto.content,
       memories: relatedMemories,
       history,
+      consentContext: memoriesConsentContext,
     });
 
     const exchange = await this.dataSource.transaction(async (manager) => {
@@ -159,11 +172,12 @@ export class ConversationsService {
     });
 
     this.queueShortTermMemoryExtraction({
-      userId: actor.userId,
+      userId: conversation.userId,
       conversationId,
       history,
       userMessage: dto.content,
       assistantMessage: assistantReply.content,
+      consentContext: memoriesConsentContext,
     });
 
     return exchange;
@@ -180,16 +194,33 @@ export class ConversationsService {
     }
 
     const conversation = await this.assertConversationOwnership(conversationId, actor);
+    const memoriesConsentContext = this.buildProviderConsentContext(
+      conversation.userId,
+      ConsentFeature.MEMORIES,
+    );
+    const voicePersonaConsentContext = this.buildProviderConsentContext(
+      conversation.userId,
+      ConsentFeature.VOICE_PERSONA,
+    );
     const persona = await this.personasService.getActivePersona();
-    const sttText = await this.resolveSttText(conversationId, dto, file);
+    const sttText = await this.resolveSttText(
+      conversationId,
+      dto,
+      file,
+      memoriesConsentContext,
+    );
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.memoryRetrievalService.retrieve(sttText);
+    const relatedMemories = await this.memoryRetrievalService.retrieve(
+      sttText,
+      memoriesConsentContext,
+    );
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
       userMessage: sttText,
       memories: relatedMemories,
       history,
+      consentContext: memoriesConsentContext,
     });
 
     try {
@@ -219,6 +250,7 @@ export class ConversationsService {
           conversationId,
           messageId: savedAssistantMessage.id,
           text: assistantReply.content,
+          consentContext: voicePersonaConsentContext,
         });
         const voiceArtifact = manager.create(VoiceArtifact, {
           messageId: savedUserMessage.id,
@@ -258,11 +290,12 @@ export class ConversationsService {
       });
 
       this.queueShortTermMemoryExtraction({
-        userId: actor.userId,
+        userId: conversation.userId,
         conversationId,
         history,
         userMessage: sttText,
         assistantMessage: assistantReply.content,
+        consentContext: memoriesConsentContext,
       });
 
       return exchange;
@@ -284,13 +317,17 @@ export class ConversationsService {
     conversationId: string;
     messageId: string;
     text: string;
+    consentContext: AiProviderConsentContext;
   }): Promise<{
     ttsAudioUrl: string | null;
     ttsStatus: string;
     fallbackTextUsed: boolean;
   }> {
     try {
-      const audioBuffer = await this.aiClientService.synthesizeSpeech(params.text);
+      const audioBuffer = await this.aiClientService.synthesizeSpeech(
+        params.text,
+        params.consentContext,
+      );
 
       if (!audioBuffer) {
         return {
@@ -335,9 +372,10 @@ export class ConversationsService {
     conversationId: string,
     dto: SendVoiceMessageDto,
     file: Express.Multer.File,
+    consentContext: AiProviderConsentContext,
   ): Promise<string> {
     try {
-      const aiSttText = await this.aiClientService.transcribe(file);
+      const aiSttText = await this.aiClientService.transcribe(file, consentContext);
       if (aiSttText?.trim()) {
         return aiSttText.trim();
       }
@@ -406,6 +444,7 @@ export class ConversationsService {
     userMessage: string;
     memories: Memory[];
     history: AiChatHistoryItem[];
+    consentContext: AiProviderConsentContext;
   }) {
     try {
       return await this.chatRuntimeService.generateAssistantReply({
@@ -413,6 +452,7 @@ export class ConversationsService {
         userMessage: params.userMessage,
         memories: params.memories,
         history: params.history,
+        consentContext: params.consentContext,
       });
     } catch (error) {
       await this.adminService.recordLog({
@@ -444,13 +484,17 @@ export class ConversationsService {
     history: AiChatHistoryItem[];
     userMessage: string;
     assistantMessage: string;
+    consentContext: AiProviderConsentContext;
   }): Promise<void> {
     try {
-      const extraction = await this.aiClientService.extractMemory({
-        history: params.history,
-        user_message: params.userMessage,
-        assistant_message: params.assistantMessage,
-      });
+      const extraction = await this.aiClientService.extractMemory(
+        {
+          history: params.history,
+          user_message: params.userMessage,
+          assistant_message: params.assistantMessage,
+        },
+        params.consentContext,
+      );
 
       if (!extraction?.saved || !extraction.summary) {
         return;
@@ -490,10 +534,21 @@ export class ConversationsService {
     history: AiChatHistoryItem[];
     userMessage: string;
     assistantMessage: string;
+    consentContext: AiProviderConsentContext;
   }): void {
     setImmediate(() => {
       void this.extractShortTermMemory(params);
     });
+  }
+
+  private buildProviderConsentContext(
+    ownerUserId: string,
+    feature: ConsentFeature,
+  ): AiProviderConsentContext {
+    return {
+      ownerUserId,
+      feature,
+    };
   }
 
 }

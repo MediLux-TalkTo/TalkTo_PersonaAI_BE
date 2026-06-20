@@ -8,7 +8,13 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SubjectLifeStatus } from '../common/enums/archive.enums';
+import {
+  SubjectAvatarType,
+  type SubjectAvatarTypeValue,
+  SubjectLifeStatus,
+  SubjectReadinessStatus,
+  type SubjectReadinessStatusValue,
+} from '../common/enums/archive.enums';
 import { Recording } from '../recordings/recording.entity';
 import { User } from '../users/user.entity';
 import { FamilyGlossaryTerm } from './family-glossary-term.entity';
@@ -42,6 +48,29 @@ export class Subject {
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
+
+  @Column({ type: 'varchar', length: 32, default: SubjectAvatarType.DEFAULT })
+  avatarType: SubjectAvatarTypeValue;
+
+  @Column({ type: 'integer', default: 0 })
+  recordingCountCache: number;
+
+  @Column({ type: 'integer', default: 0 })
+  recordingSecondsCache: number;
+
+  @Column({
+    type: 'varchar',
+    length: 32,
+    default: SubjectReadinessStatus.NOT_STARTED,
+  })
+  memoriesStatus: SubjectReadinessStatusValue;
+
+  @Column({
+    type: 'varchar',
+    length: 32,
+    default: SubjectReadinessStatus.NOT_STARTED,
+  })
+  personaStatus: SubjectReadinessStatusValue;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

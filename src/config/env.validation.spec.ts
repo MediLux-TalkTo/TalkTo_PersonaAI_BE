@@ -74,4 +74,47 @@ describe('validateEnv', () => {
       }),
     ).toThrow(/Environment validation failed/);
   });
+
+  it('defaults removed v1 Preview and free AI flags to disabled', () => {
+    const result = validateEnv(baseConfig);
+
+    expect(result).toMatchObject({
+      FREE_ARCHIVE_AI_SUMMARY_ENABLED: false,
+      FREE_PREVIEW_ANALYSIS_ENABLED: false,
+      S10_PREVIEW_SCREEN_ENABLED: false,
+      GENERATED_VOICE_DOWNLOAD_ENABLED: false,
+      PAYMENT_PROVIDER: 'local',
+      PAYMENT_WEBHOOK_SECRET: 'local-payment-webhook-secret',
+      PAYMENT_WEBHOOK_TOLERANCE_SECONDS: 300,
+    });
+  });
+
+  it('parses local payment webhook settings', () => {
+    const result = validateEnv({
+      ...baseConfig,
+      PAYMENT_PROVIDER: 'local',
+      PAYMENT_WEBHOOK_SECRET: 'payment-secret',
+      PAYMENT_WEBHOOK_TOLERANCE_SECONDS: '120',
+    });
+
+    expect(result.PAYMENT_PROVIDER).toBe('local');
+    expect(result.PAYMENT_WEBHOOK_SECRET).toBe('payment-secret');
+    expect(result.PAYMENT_WEBHOOK_TOLERANCE_SECONDS).toBe(120);
+  });
+
+  it('rejects removed Preview and free AI flags in production', () => {
+    expect(() =>
+      validateEnv({
+        ...baseConfig,
+        NODE_ENV: 'production',
+        DB_SYNCHRONIZE: 'false',
+        FREE_ARCHIVE_AI_SUMMARY_ENABLED: 'true',
+        FREE_PREVIEW_ANALYSIS_ENABLED: 'true',
+        S10_PREVIEW_SCREEN_ENABLED: 'true',
+        GENERATED_VOICE_DOWNLOAD_ENABLED: 'true',
+        PAYMENT_PROVIDER: 'local',
+        PAYMENT_WEBHOOK_SECRET: 'local-payment-webhook-secret',
+      }),
+    ).toThrow(/FREE_ARCHIVE_AI_SUMMARY_ENABLED must remain false in production/);
+  });
 });

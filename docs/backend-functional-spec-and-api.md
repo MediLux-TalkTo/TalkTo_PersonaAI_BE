@@ -4,6 +4,14 @@
 
 This document defines the backend MVP scope for TalkTo Persona AI based on the Notion page `Persona AI MVP 기능명세서`.
 
+v1.0 source priority:
+
+- `TalkTo_개발자용_기능명세서_v1.0.md` is the source of truth for v1.0 decisions when it conflicts with older Notion rows, pasted notes, or this legacy MVP baseline.
+- The current backend is a mixed surface: legacy Persona Chat MVP plus implemented Archive-first foundations for subjects, consents, questions, recordings, payments, entitlements, queued paid analysis jobs, admin worker transition endpoints for paid analysis jobs, paid Memories search over indexed analysis segments, memory segment playback/feedback, in-app analysis status notifications, and R&D redacted export opt-in/preview guardrails.
+- Free Archive must stay storage/playback only. It must not create Preview, STT, LLM summary, embedding, memory segment, or analysis job work.
+- Preview/sample analysis is excluded from v1.0. `POST /api/v1/recordings/{recordingId}/preview-analysis` exists only as a disabled compatibility endpoint returning `409 feature_deferred`; it must not enqueue Preview, free AI, or analysis job work.
+- Payment products/orders/webhooks/entitlements, paid Archive analysis job creation, paid Memories status/search, memory segment playback/feedback, Voice Persona application core routes, and gated Voice Persona runtime sessions/messages are implemented. Existing legacy `/memories` CRUD is not the paid v1.0 Memories search surface, and existing `/personas/active` plus `/conversations/*` are separate legacy Persona Chat routes.
+
 Backend scope only:
 
 - Authentication and authorization
@@ -21,17 +29,14 @@ Out of scope for this document:
 - Internal AI prompt design details
 - Embedding model implementation details beyond backend contracts
 
-Current hosted MVP baseline:
+Current backend data/configuration baseline:
 
-- Backend: `https://talkto-personaai-be.onrender.com`
-- AI server: `https://talkto-persona-ai.onrender.com`
-- Database: Neon PostgreSQL
-- Voice TTS asset storage: private Cloudflare R2 objects returned through signed URLs
 - Long-term memory source: AI repository `data/memories.json`
 - Backend memory import payload: AI repository `backend_memory/memory_import.json`
 - Ver4 memory import contract: 72 manually curated `LONG_TERM` memories, no `confidenceScore`, and pass-through string tags
 - The backend stores and forwards memory tags to `/ai/chat`; tag interpretation stays in the AI prompt, not backend search policy
-- Production DB check on 2026-05-24: 72 active `LONG_TERM` memories, 19 `sensitive` tagged memories, 72 embedded chunks, and smoke-test rows removed
+- Historical DB check on 2026-05-24: 72 active `LONG_TERM` memories, 19 `sensitive` tagged memories, 72 embedded chunks, and smoke-test rows removed
+- Environment ownership and runtime hosting details are intentionally outside this docs baseline.
 
 ## 2. Product Goal
 
@@ -197,7 +202,7 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 
 - Require consent completion before conversation features become available
 - Save latest consent record per user
-- Expose consent status for frontend gating
+- Expose consent status for client gating
 - Expose feature-specific requirements for `archive`, `memories`, and `voice_persona`
 - Save versioned purpose consents for P0 Archive/Memories/Voice Persona gates
 - Return `requires_consent` with missing consent types when a paid or AI feature lacks required consent
@@ -252,6 +257,31 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 - Aggregate voice usage
 - Aggregate positive and negative feedback ratio
 - Provide filtered error logs for STT, TTS, and LLM failures
+
+## 5.10 v1.0 Implementation Status Baseline
+
+Implemented today:
+
+- Auth, legacy family/admin roles, active persona profile, legacy Persona Chat text/voice conversation flow, legacy memory CRUD/revision logs, feedback, admin metrics/logs.
+- Archive-first subject profiles, family glossary terms, question cards/interactions, purpose consent requirements/acceptance, recording upload intent/complete/list/detail/playback.
+- Payment products, order checkout records, verified local payment webhooks, active entitlements, and queued paid Archive analysis jobs for Memories orders with a target recording.
+- Admin worker transition endpoints for paid analysis preprocessing, STT transcript persistence, redaction gate, memory segment persistence, embedding persistence, completion, and failure.
+- Paid Memories status and search endpoints over analyzed Archive memory segments.
+- Memory segment playback URLs with `download_allowed=false` and segment feedback.
+- In-app notification rows and current-user notification list/read APIs for analysis completion/failure.
+- R&D research export opt-in/withdrawal and admin redacted export preview that excludes non-opted-in users and raw fields.
+- Voice Persona application creation gated by consent/entitlement, document upload intents, intake draft/submit, target voice sample submission, and build status lock reasons.
+- Voice Persona admin/QA document and voice sample review, Persona Bible draft/review, manual provider asset registration, and manual build status updates with audit rows.
+- Voice Persona family-safe Bible review, approve/request-changes persistence, and runtime config enablement gate.
+- Gated Voice Persona runtime sessions/messages with Memories RAG sources, safety block fallback, TTS playback when configured, and usage accounting.
+- Data deletion requests with exact confirmation plus provider deletion tracking records for manual voice provider assets.
+- Admin/ops v1 operations search and dashboard counts over users, subjects, recordings, orders, entitlements, analysis jobs, Voice Persona applications, and deletion requests.
+- Family sharing APIs are intentionally deferred; paid Memories and Voice Persona remain owner-only until a future `owner_or_allowed` grant model exists.
+
+Not yet implemented:
+
+- Automated provider execution for STT/redaction/embedding workers and summary/tagging workers.
+- Voice Persona status notifications and family sharing grants.
 
 ## 6. API Design Principles
 
@@ -318,11 +348,61 @@ The MVP provides a web backend that allows family users to chat with a grandmoth
 | Subjects | DELETE | `/api/v1/subjects/{subjectId}/glossary/{termId}` | Delete family glossary term | User |
 | Questions | GET | `/api/v1/question-cards` | List default question cards | User |
 | Questions | POST | `/api/v1/subjects/{subjectId}/question-interactions` | Record question completion/skip/custom item | User |
+| Recordings | GET | `/api/v1/upload-guide` | Get recording upload constraints and supported client values | User |
 | Recordings | POST | `/api/v1/recordings/upload-intent` | Create recording upload intent | User |
+| Recordings | POST | `/api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/retry` | Create a fresh upload intent for a failed, canceled, or expired upload | User |
+| Recordings | POST | `/api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/cancel` | Cancel an in-progress upload intent or return the current terminal intent | User |
 | Recordings | POST | `/api/v1/recordings/{recordingId}/complete` | Mark recording upload complete | User |
 | Recordings | GET | `/api/v1/subjects/{subjectId}/recordings` | List subject recordings | User |
 | Recordings | GET | `/api/v1/recordings/{recordingId}` | Get recording detail | User |
+| Recordings | POST | `/api/v1/recordings/{recordingId}/preview-analysis` | Disabled compatibility endpoint returning `409 feature_deferred` | User |
 | Recordings | POST | `/api/v1/recordings/{recordingId}/playback-url` | Issue expiring recording playback URL | User |
+| Orders | POST | `/api/v1/orders` | Create pending checkout order; Memories orders require `targetRecordingId` | User |
+| Payments | POST | `/api/v1/payments/local/webhook` | Verify local payment webhook, create entitlement, and queue paid analysis job for Memories target recording | Provider |
+| Entitlements | GET | `/api/v1/entitlements` | List active entitlements for current user | User |
+| Memories | GET | `/api/v1/memories/status` | Get paid Memories entitlement and index readiness | User |
+| Memories | POST | `/api/v1/memories/search` | Search paid Memories over analyzed Archive memory segments | User |
+| Memory Segments | POST | `/api/v1/memory-segments/{memorySegmentId}/playback-url` | Issue segment-scoped original audio playback URL | User |
+| Memory Segments | POST | `/api/v1/memory-segments/{memorySegmentId}/feedback` | Submit segment feedback or timestamp issue report | User |
+| Notifications | GET | `/api/v1/notifications` | List current user in-app notifications | User |
+| Notifications | PATCH | `/api/v1/notifications/{notificationId}/read` | Mark current user notification as read | User |
+| Data Rights | GET | `/api/v1/data-rights/research-export` | Get R&D redacted export opt-in preference | User |
+| Data Rights | POST | `/api/v1/data-rights/research-export/opt-in` | Opt in to R&D redacted export eligibility | User |
+| Data Rights | POST | `/api/v1/data-rights/research-export/withdraw` | Withdraw R&D redacted export opt-in | User |
+| Data Rights | GET | `/api/v1/admin/data-rights/research-export-preview` | Preview opted-in redacted export rows | Admin/Ops |
+| Voice Persona | POST | `/api/v1/voice-persona/applications` | Create gated Voice Persona build application | User |
+| Voice Persona | POST | `/api/v1/voice-persona/applications/{applicationId}/documents/upload-intent` | Create document upload intent | User |
+| Voice Persona | PUT | `/api/v1/voice-persona/applications/{applicationId}/intake` | Save Persona intake draft sections | User |
+| Voice Persona | POST | `/api/v1/voice-persona/applications/{applicationId}/intake/submit` | Submit complete 8-section intake | User |
+| Voice Persona | POST | `/api/v1/voice-persona/applications/{applicationId}/voice-samples` | Submit target voice sample | User |
+| Voice Persona | GET | `/api/v1/voice-persona/applications/{applicationId}/build-status` | Get build status lock reasons | User |
+| Admin Voice Persona | PATCH | `/api/v1/admin/voice-persona/documents/{documentId}/review` | Approve/reject evidence document | Admin/Ops/AI QA |
+| Admin Voice Persona | PATCH | `/api/v1/admin/voice-persona/voice-samples/{sampleId}/review` | Approve/reject target voice sample | Admin/Ops/AI QA |
+| Admin Voice Persona | PATCH | `/api/v1/admin/voice-persona/applications/{applicationId}/build-status` | Manually update build status | Admin/Ops/AI QA |
+| Admin Voice Persona | PUT | `/api/v1/admin/voice-persona/applications/{applicationId}/persona-bible` | Create/update Persona Bible draft | Admin/Ops/AI QA |
+| Admin Voice Persona | PATCH | `/api/v1/admin/voice-persona/persona-bibles/{bibleId}/review` | Review Persona Bible | Admin/Ops/AI QA |
+| Admin Voice Persona | POST | `/api/v1/admin/voice-persona/applications/{applicationId}/provider-assets` | Register manual provider asset | Admin/Ops/AI QA |
+| Voice Persona | GET | `/api/v1/voice-persona/applications/{applicationId}/family-review` | Get family-safe Persona Bible review view | User |
+| Voice Persona | POST | `/api/v1/voice-persona/applications/{applicationId}/family-review/approve` | Approve family review and enable runtime config if gates pass | User |
+| Voice Persona | POST | `/api/v1/voice-persona/applications/{applicationId}/family-review/request-changes` | Persist family review change request | User |
+| Persona Runtime | POST | `/api/v1/persona/sessions` | Create gated Voice Persona runtime session | User |
+| Persona Runtime | POST | `/api/v1/persona/sessions/{sessionId}/messages` | Send gated Voice Persona runtime message | User |
+| Data Rights | POST | `/api/v1/data-deletion-requests` | Create strongly confirmed data deletion request | User |
+| Data Rights | PATCH | `/api/v1/admin/data-deletion-requests/{requestId}` | Update deletion request status | Admin/Ops |
+| Data Rights | PATCH | `/api/v1/admin/provider-deletion-records/{recordId}` | Update provider deletion tracking status | Admin/Ops |
+| Admin | GET | `/api/v1/admin/operations/search` | Search sanitized v1 operations resources | Admin/Ops |
+| Admin | GET | `/api/v1/admin/operations/dashboard` | Get v1 operations aggregate counts | Admin/Ops |
+| Analysis | GET | `/api/v1/memories/analysis-jobs` | List my Memories analysis job status with failure code and progress | User |
+| Analysis | POST | `/api/v1/analysis/jobs/{jobId}/retry` | Requeue a retryable failed analysis job | User |
+| Analysis | GET | `/api/v1/admin/analysis-jobs` | List all Memories analysis job status rows | Admin/Ops |
+| Analysis | POST | `/api/v1/admin/analysis-jobs/{jobId}/retry` | Requeue a retryable analysis job and write an audit log | Admin/Ops |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/preprocess` | Mark paid analysis preprocessing and lease worker progress | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/stt` | Mark STT processing and upsert transcript segments | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/redaction` | Mark redaction gate pending | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/segmenting` | Mark segmenting and upsert memory segments | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/indexing` | Mark indexing and upsert embeddings | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/completed` | Mark paid analysis completed | Admin |
+| Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/failed` | Mark paid analysis failed | Admin |
 | Conversations | POST | `/api/v1/conversations` | Create conversation | User |
 | Conversations | GET | `/api/v1/conversations` | List my conversations | User |
 | Conversations | GET | `/api/v1/conversations/{conversationId}` | Get conversation detail | User |
@@ -351,9 +431,30 @@ The Archive-first expansion from the 2026-06-02 feature spec is represented by s
 - Subject profiles store the family target person, relationship, life status, region/dialect hints, and notes.
 - Family glossary terms store names, nicknames, places, and phrases that can later improve STT post-processing.
 - Question cards are fixed backend-provided prompts; interactions record completed, skipped, viewed, or custom questions.
+- `GET /api/v1/upload-guide` returns supported MIME types, maximum upload size, single-file guidance, allowed upload sources/platforms, upload intent lifecycle values, failure codes, and checksum statuses for clients before they request an upload intent.
 - Recording upload intent creates a `recordings` row and a presigned PUT URL for direct object storage upload.
-- Recording completion marks `uploadStatus=UPLOADED`; AI preview/full analysis workers are not started in this backend slice.
+- Upload source values are `app_recording`, `share_extension`, and `manual_upload`; platform values are `ios`, `android`, and `web`.
+- Retry is available only for failed, canceled, or expired upload intents. `POST /api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/retry` returns a fresh upload intent response with the current `recording`, new `uploadIntentId`, upload URL, storage key, expiry, source, platform, and single-file metadata.
+- Cancel is idempotent for terminal upload intents. `POST /api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/cancel` cancels an in-progress intent with `status=canceled` and `failureCode=upload_canceled`; if the intent is already completed, failed, canceled, or expired, the backend preserves that terminal state and returns the current intent.
+- Recording completion marks `uploadStatus=UPLOADED`; AI Preview, STT, summary, embedding, memory segment, and analysis workers are not started in the free Archive slice.
+- Completed Archive recordings remain `archive_status=archived`, `analysis_stage=not_analyzed`, `summary_status=locked_until_memories`, and `memories_status=locked_until_memories` until a verified paid Memories order queues analysis.
 - Recording playback issues a separate expiring URL only after ownership and upload status checks.
+- Preview analysis is deferred/disabled by v1.0. `POST /api/v1/recordings/{recordingId}/preview-analysis` is implemented only as a disabled compatibility endpoint that returns `409 feature_deferred` and creates no Preview, free AI, STT, summary, embedding, memory segment, or analysis job work.
+- Paid Memories order creation requires Memories consent and `targetRecordingId`. A verified payment webhook creates an active entitlement and queues one active `analysis_jobs` row for the archived target recording after rechecking active entitlement, Memories consent, archived upload state, paid order ownership, and duplicate active jobs.
+- Analysis job statuses are `queued`, `leased`, `preprocessing`, `stt_processing`, `redaction_pending`, `segmenting`, `embedding`, `indexing`, `completed`, `failed_retryable`, `failed_terminal`, `blocked_consent_withdrawn`, and `cancelled`. The durable state machine, lease/retry metadata, timeout terminalization helper, consent-withdrawal blocking helper, retry endpoint, and admin worker transition endpoints are implemented. Worker transition endpoints persist worker-supplied transcript segments, memory segments, and embeddings idempotently; they do not run external STT, LLM, masking, segmentation, embedding, or Memories search providers themselves.
+- Paid Memories search requires an active Memories entitlement and required Memories purpose consent. `GET /api/v1/memories/status` reports entitlement, searchable index state, indexed segment count, completed job count, and latest completion timestamp. `POST /api/v1/memories/search` searches owned analyzed `memory_segments` with optional stored embedding scores, supports optional `subjectId`, `recordingId`, and `limit`, and returns answer/no-result/low-confidence states with segment text and timestamp references. It does not use legacy `/memories` CRUD rows as paid search results.
+- Memory segment playback is owner-only. `POST /api/v1/memory-segments/{memorySegmentId}/playback-url` issues a short-lived segment-scoped URL with media-fragment start/end semantics, `download_allowed=false`, safe app event metadata, and a sensitive-read audit row. `POST /api/v1/memory-segments/{memorySegmentId}/feedback` upserts rating/tags/comment and optional reported timestamp corrections for the segment.
+- Analysis completion and failure transitions create sanitized in-app notification rows without transcripts, presigned URLs, raw audio URLs, or provider payloads. `GET /api/v1/notifications` lists current-user notifications with optional `limit` and `unreadOnly`; `PATCH /api/v1/notifications/{notificationId}/read` marks only the authenticated user's notification as read.
+- R&D redacted export is opt-in only. `GET /api/v1/data-rights/research-export`, `POST /api/v1/data-rights/research-export/opt-in`, and `POST /api/v1/data-rights/research-export/withdraw` manage the current user's preference with audit/event rows. `GET /api/v1/admin/data-rights/research-export-preview` is an admin/ops dry-run that returns only opted-in memory segment ids, owner/subject/recording ids, timestamps, eligibility state, and redacted text when a successful redaction exists. It does not return raw audio keys, presigned URLs, raw transcripts, or raw memory text.
+- Voice Persona application core is separate from legacy Persona Chat. `POST /api/v1/voice-persona/applications` requires subject ownership, Voice Persona purpose consent, and an active Voice Persona entitlement. Document upload intents, Persona intake drafts, 8-section intake submission, target voice sample submission, and build-status lock reasons are implemented. Build remains locked until documents and samples are approved by later admin review APIs, intake is submitted, and provider/family review work lands.
+- Voice Persona admin/QA routes process evidence documents, target voice samples, Persona Bible drafts/reviews, manual build status, and manual provider asset registration. Each action writes a sanitized sensitive-write audit row and does not store provider credentials.
+- Voice Persona family review exposes only the approved Persona Bible summary and safety notes, not raw evidence, recordings, transcripts, or provider payloads. Approval persists a review row and creates/enables runtime config only when the Persona Bible is approved, a manual provider asset is registered, and the build status is `ready`; otherwise the runtime stays disabled.
+- Persona runtime routes require an enabled runtime config and Voice Persona consent; they do not reuse legacy `/conversations`. Runtime messages use recent Memories segments as RAG sources, block unsafe topics with a safe response, synthesize TTS when the AI server is configured, and track per-session usage.
+- Data deletion requests require exact `DELETE MY DATA` confirmation. Account/subject requests create pending manual provider deletion tracking rows for matching voice provider assets, and admin/ops status updates write sanitized audit rows.
+- Admin/ops operations search returns only sanitized operational identifiers, labels, owner/subject ids, statuses, and timestamps. It audits reads and does not return raw transcripts, document contents, provider secrets, presigned URLs, or contact payloads.
+- Family sharing is P1-deferred. This backend does not expose family invite/share/grant APIs for paid Memories or Voice Persona access, and no implicit non-owner access is allowed without a future `owner_or_allowed` grant helper.
+- `GET /api/v1/memories/analysis-jobs` returns only the authenticated user's analysis jobs. It accepts optional `status`, `recordingId`, `subjectId`, and `limit` filters and returns `failureCode`, `failureMessage`, retry counters, timestamps, and a derived `progress` object.
+- `GET /api/v1/admin/analysis-jobs` exposes the same status shape across owners for `ADMIN` and `OPS` roles only. `POST /api/v1/admin/analysis-jobs/{jobId}/retry` reuses the existing retryable-failure state machine, requeues the same job row instead of creating a duplicate active job, and writes an `analysis_job_retry` audit log with actor, resource, previous status, previous failure code, retry count, and recording metadata.
 
 Supported recording MIME types:
 
@@ -719,5 +820,5 @@ Implemented MVP baseline:
 4. Text chat with AI `/ai/embed` and `/ai/chat`
 5. Voice flow with AI STT/chat/TTS orchestration and R2-capable TTS storage
 6. Admin overview/daily metrics, negative feedback summary, review queue, and error log APIs
-7. Render + Neon deployed smoke path for BE/DB verification
+7. BE/DB smoke path for target environment verification
 8. Archive subject, question card, recording upload intent, recording archive, and original recording playback URL APIs

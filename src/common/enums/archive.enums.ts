@@ -37,3 +37,30 @@ export enum RecordingAnalysisStatus {
   FULLY_INDEXED = 'FULLY_INDEXED',
   FULL_ANALYSIS_FAILED = 'FULL_ANALYSIS_FAILED',
 }
+
+export const SubjectAvatarType = {
+  DEFAULT: 'DEFAULT',
+} as const;
+
+export type SubjectAvatarTypeValue =
+  (typeof SubjectAvatarType)[keyof typeof SubjectAvatarType];
+
+export const SubjectReadinessStatus = {
+  NOT_STARTED: 'NOT_STARTED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  READY: 'READY',
+} as const;
+
+export type SubjectReadinessStatusValue =
+  (typeof SubjectReadinessStatus)[keyof typeof SubjectReadinessStatus];
+
+export const OnboardingSituation = {
+  LIVING: 'living',
+  DECEASED: 'deceased',
+  VOICE_PERSONA_INTEREST: 'voice_persona_interest',
+} as const;
+
+export type OnboardingSituationValue =
+  (typeof OnboardingSituation)[keyof typeof OnboardingSituation];
+
+export const onboardingSituationValues = Object.values(OnboardingSituation);

@@ -14,6 +14,17 @@ import {
 import { Subject } from '../subjects/subject.entity';
 import { User } from '../users/user.entity';
 
+export const RecordingArchiveStatus = {
+  PENDING_UPLOAD: 'pending_upload',
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+  DELETION_REQUESTED: 'deletion_requested',
+  DELETED: 'deleted',
+} as const;
+
+export type RecordingArchiveStatus =
+  (typeof RecordingArchiveStatus)[keyof typeof RecordingArchiveStatus];
+
 @Entity('recordings')
 export class Recording {
   @PrimaryGeneratedColumn('uuid')
@@ -53,6 +64,13 @@ export class Recording {
   relatedQuestionText: string | null;
 
   @Column({
+    type: 'varchar',
+    length: 40,
+    default: RecordingArchiveStatus.PENDING_UPLOAD,
+  })
+  archiveStatus: RecordingArchiveStatus;
+
+  @Column({
     type: 'enum',
     enum: RecordingUploadStatus,
     default: RecordingUploadStatus.CREATED,
@@ -68,6 +86,18 @@ export class Recording {
 
   @Column({ type: 'timestamptz', nullable: true })
   uploadedAt: Date | null;
+
+  @Column({ length: 40, default: 'not_analyzed' })
+  analysisStage: string;
+
+  @Column({ length: 80, default: 'locked_until_memories' })
+  memoriesStatus: string;
+
+  @Column({ length: 40, default: 'not_supported' })
+  checksumStatus: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

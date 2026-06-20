@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AppEventsService } from '../events/events.service';
+import { SubjectsService } from '../subjects/subjects.service';
 import { QuestionInteraction } from './question-interaction.entity';
 import { CreateQuestionInteractionDto, QuestionCardDto } from './dto/question.dto';
-import { SubjectsService } from '../subjects/subjects.service';
 
 const DEFAULT_QUESTION_CARDS: QuestionCardDto[] = [
   {
@@ -42,6 +43,7 @@ const DEFAULT_QUESTION_CARDS: QuestionCardDto[] = [
 export class QuestionsService {
   constructor(
     private readonly subjectsService: SubjectsService,
+    private readonly appEventsService: AppEventsService,
     @InjectRepository(QuestionInteraction)
     private readonly interactionsRepository: Repository<QuestionInteraction>,
   ) {}
@@ -67,6 +69,19 @@ export class QuestionsService {
       note: dto.note ?? null,
     });
 
-    return this.interactionsRepository.save(interaction);
+    const savedInteraction = await this.interactionsRepository.save(interaction);
+    await this.appEventsService.emit({
+      userId,
+      name: 'question.interaction_recorded',
+      subjectId,
+      payload: {
+        questionId: savedInteraction.questionId,
+        category: savedInteraction.category,
+        interactionType: savedInteraction.interactionType,
+        hasNote: Boolean(savedInteraction.note),
+      },
+    });
+
+    return savedInteraction;
   }
 }

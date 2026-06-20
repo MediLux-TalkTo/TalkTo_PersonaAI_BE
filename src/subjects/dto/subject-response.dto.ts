@@ -1,6 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiMetaDto } from '../../common/swagger/api-meta.dto';
-import { GlossaryTermType, SubjectLifeStatus } from '../../common/enums/archive.enums';
+import {
+  GlossaryTermType,
+  SubjectAvatarType,
+  SubjectLifeStatus,
+  SubjectReadinessStatus,
+} from '../../common/enums/archive.enums';
 
 export class FamilyGlossaryTermDto {
   @ApiProperty({ example: 'term-001' })
@@ -29,6 +34,9 @@ export class SubjectDto {
   @ApiProperty({ example: 'grandmother' })
   relationship: string;
 
+  @ApiProperty({ example: '할머니' })
+  relationshipLabel: string;
+
   @ApiProperty({ enum: SubjectLifeStatus, example: SubjectLifeStatus.LIVING })
   lifeStatus: SubjectLifeStatus;
 
@@ -38,8 +46,32 @@ export class SubjectDto {
   @ApiProperty({ example: '경상도 사투리', nullable: true })
   dialectHint: string | null;
 
+  @ApiProperty({ example: '부산 · 경상도 사투리', nullable: true })
+  regionText: string | null;
+
   @ApiProperty({ example: '요리를 좋아하셨음', nullable: true })
   notes: string | null;
+
+  @ApiProperty({ enum: SubjectAvatarType, example: SubjectAvatarType.DEFAULT })
+  avatarType: string;
+
+  @ApiProperty({ example: 2 })
+  recordingCount: number;
+
+  @ApiProperty({ example: 184 })
+  recordingSeconds: number;
+
+  @ApiProperty({
+    enum: SubjectReadinessStatus,
+    example: SubjectReadinessStatus.NOT_STARTED,
+  })
+  memoriesStatus: string;
+
+  @ApiProperty({
+    enum: SubjectReadinessStatus,
+    example: SubjectReadinessStatus.NOT_STARTED,
+  })
+  personaStatus: string;
 
   @ApiProperty({ type: [FamilyGlossaryTermDto] })
   glossaryTerms?: FamilyGlossaryTermDto[];

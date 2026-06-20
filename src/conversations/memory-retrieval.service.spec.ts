@@ -2,6 +2,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import { AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
+import { ConsentFeature } from '../common/enums/consent.enums';
 import { MemoryStatus } from '../common/enums/memory.enums';
 import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
@@ -19,6 +20,10 @@ describe('MemoryRetrievalService', () => {
   let memoryEmbeddingsRepository: ReturnType<typeof repository>;
   let aiClientService: { embed: jest.Mock };
   let adminService: { recordLog: jest.Mock };
+  const consentContext = {
+    ownerUserId: 'owner-id',
+    feature: ConsentFeature.MEMORIES,
+  };
 
   beforeEach(async () => {
     memoriesRepository = repository();
@@ -59,10 +64,11 @@ describe('MemoryRetrievalService', () => {
       },
     ]);
 
-    await expect(service.retrieve('불고기')).resolves.toEqual([
+    await expect(service.retrieve('불고기', consentContext)).resolves.toEqual([
       betterMemory,
       weakerMemory,
     ]);
+    expect(aiClientService.embed).toHaveBeenCalledWith('불고기', consentContext);
     expect(memoriesRepository.find).not.toHaveBeenCalled();
   });
 
@@ -71,7 +77,10 @@ describe('MemoryRetrievalService', () => {
     aiClientService.embed.mockResolvedValue([1, 0]);
     memoryEmbeddingsRepository.query.mockResolvedValue([pgvectorMemory]);
 
-    await expect(service.retrieve('불고기')).resolves.toEqual([pgvectorMemory]);
+    await expect(service.retrieve('불고기', consentContext)).resolves.toEqual([
+      pgvectorMemory,
+    ]);
+    expect(aiClientService.embed).toHaveBeenCalledWith('불고기', consentContext);
     expect(memoryEmbeddingsRepository.query).toHaveBeenCalledWith(
       expect.stringContaining('"embeddingVector" <=> $1::vector'),
       ['[1,0]', MemoryStatus.ACTIVE],
@@ -84,7 +93,10 @@ describe('MemoryRetrievalService', () => {
     aiClientService.embed.mockRejectedValue(new Error('embed down'));
     memoriesRepository.find.mockResolvedValue(keywordMemories);
 
-    await expect(service.retrieve('불고기')).resolves.toEqual(keywordMemories);
+    await expect(service.retrieve('불고기', consentContext)).resolves.toEqual(
+      keywordMemories,
+    );
+    expect(aiClientService.embed).toHaveBeenCalledWith('불고기', consentContext);
     expect(adminService.recordLog).toHaveBeenCalledWith(
       expect.objectContaining({
         detail: expect.objectContaining({ reason: 'query_embedding_failed' }),

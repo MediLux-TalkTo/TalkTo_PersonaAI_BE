@@ -52,10 +52,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? response.message.join(', ')
         : String(response.message ?? this.defaultMessage(status));
 
-      const details =
-        Array.isArray(response.message) || response.error
-          ? { raw: response }
-          : response;
+      const details = this.detailsFromResponse(response);
 
       return {
         code: String(response.code ?? this.codeFromStatus(status)),
@@ -69,6 +66,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: this.defaultMessage(status),
       details: {},
     };
+  }
+
+  private detailsFromResponse(response: Record<string, unknown>) {
+    if (response.details && typeof response.details === 'object') {
+      return response.details;
+    }
+
+    if (Array.isArray(response.message) || response.error) {
+      return { raw: response };
+    }
+
+    return response;
   }
 
   private codeFromStatus(status: number) {

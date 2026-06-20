@@ -6,6 +6,7 @@ import {
   ConsentStatus,
   ConsentType,
 } from '../common/enums/consent.enums';
+import { AppEventsService } from '../events/events.service';
 import { SubjectsService } from '../subjects/subjects.service';
 import { Consent } from './consent.entity';
 import { ConsentsService } from './consents.service';
@@ -25,18 +26,21 @@ describe('ConsentsService', () => {
   let service: ConsentsService;
   let consentsRepository: ReturnType<typeof repository>;
   let subjectsService: { getOwned: jest.Mock };
+  let appEventsService: { emit: jest.Mock };
 
   beforeEach(async () => {
     consentsRepository = repository();
     subjectsService = {
       getOwned: jest.fn().mockResolvedValue({ id: 'subject-id' }),
     };
+    appEventsService = { emit: jest.fn().mockResolvedValue(null) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         ConsentsService,
         { provide: getRepositoryToken(Consent), useValue: consentsRepository },
         { provide: SubjectsService, useValue: subjectsService },
+        { provide: AppEventsService, useValue: appEventsService },
       ],
     }).compile();
 
@@ -96,6 +100,19 @@ describe('ConsentsService', () => {
       ConsentFeature.ARCHIVE,
       ConsentFeature.MEMORIES,
     ]);
+    expect(appEventsService.emit).toHaveBeenCalledWith({
+      userId: 'user-id',
+      name: 'consent.accepted',
+      subjectId: 'subject-id',
+      payload: {
+        acceptedFeatures: [ConsentFeature.ARCHIVE, ConsentFeature.MEMORIES],
+        consentTypes: [
+          ConsentType.AUDIO_STORAGE_SERVICE,
+          ConsentType.AI_ANALYSIS_SERVICE,
+        ],
+        count: 2,
+      },
+    });
   });
 
   it('blocks paid AI features when required consents are missing', async () => {

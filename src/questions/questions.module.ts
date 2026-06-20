@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventsModule } from '../events/events.module';
 import { SubjectsModule } from '../subjects/subjects.module';
 import { QuestionInteraction } from './question-interaction.entity';
 import { QuestionsController } from './questions.controller';
 import { QuestionsService } from './questions.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([QuestionInteraction]), SubjectsModule],
+  imports: [TypeOrmModule.forFeature([QuestionInteraction]), SubjectsModule, EventsModule],
   controllers: [QuestionsController],
   providers: [QuestionsService],
 })

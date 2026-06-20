@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminModule } from '../admin/admin.module';
 import { AiModule } from '../ai/ai.module';
+import { MemoriesSearchModule } from '../memories-search/memories-search.module';
 import { MemoryEmbedding } from './memory-embedding.entity';
 import { MemoryRevision } from './memory-revision.entity';
 import { Memory } from './memory.entity';
@@ -13,6 +14,7 @@ import { MemoriesService } from './memories.service';
     TypeOrmModule.forFeature([Memory, MemoryRevision, MemoryEmbedding]),
     AiModule,
     AdminModule,
+    MemoriesSearchModule,
   ],
   controllers: [MemoriesController],
   providers: [MemoriesService],

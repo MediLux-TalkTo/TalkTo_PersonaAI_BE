@@ -12,6 +12,8 @@ import { Message } from '../conversations/message.entity';
 import { VoiceArtifact } from '../conversations/voice-artifact.entity';
 import { Feedback } from '../feedback/feedback.entity';
 import { QueryFeedbackReviewsDto } from './dto/query-feedback-reviews.dto';
+import { AuditService } from '../audit/audit.service';
+import { QueryOperationsSearchDto } from './dto/query-operations.dto';
 
 @Injectable()
 export class AdminService {
@@ -29,6 +31,7 @@ export class AdminService {
     private readonly voiceArtifactsRepository: Repository<VoiceArtifact>,
     @InjectRepository(Feedback)
     private readonly feedbackRepository: Repository<Feedback>,
+    private readonly auditService: AuditService,
   ) {}
 
   async getMetricsOverview() {
@@ -265,5 +268,80 @@ export class AdminService {
     });
 
     await this.logsRepository.save(log);
+  }
+
+  async searchOperations(actorUserId: string, dto: QueryOperationsSearchDto) {
+    const q = `%${dto.q ?? ''}%`;
+    const status = dto.status ?? null;
+    const limit = dto.limit ?? 25;
+    const rows = await this.dataSource.query(
+      `
+        SELECT * FROM (
+          SELECT 'user' AS type, "id"::text AS id, "email" AS label, NULL::text AS owner_user_id, NULL::text AS subject_id, "role"::text AS status, "createdAt" AS created_at
+          FROM "users"
+          WHERE ($1 = '%%' OR "email" ILIKE $1 OR "name" ILIKE $1)
+          UNION ALL
+          SELECT 'subject', "id"::text, "displayName", "ownerUserId"::text, "id"::text, "personaStatus"::text, "createdAt"
+          FROM "subjects"
+          WHERE ($1 = '%%' OR "displayName" ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+          UNION ALL
+          SELECT 'recording', "id"::text, "originalFilename", "ownerUserId"::text, "subjectId"::text, "archiveStatus"::text, "createdAt"
+          FROM "recordings"
+          WHERE ($1 = '%%' OR "originalFilename" ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+          UNION ALL
+          SELECT 'order', "id"::text, "productId", "ownerUserId"::text, NULL::text, "paymentStatus"::text, "createdAt"
+          FROM "orders"
+          WHERE ($1 = '%%' OR "id"::text ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+          UNION ALL
+          SELECT 'entitlement', "id"::text, "productId", "ownerUserId"::text, NULL::text, "status"::text, "createdAt"
+          FROM "entitlements"
+          WHERE ($1 = '%%' OR "id"::text ILIKE $1 OR "ownerUserId"::text ILIKE $1 OR "productId" ILIKE $1)
+          UNION ALL
+          SELECT 'analysis_job', "id"::text, "recordingId"::text, "ownerUserId"::text, "subjectId"::text, "status"::text, "createdAt"
+          FROM "analysis_jobs"
+          WHERE ($1 = '%%' OR "id"::text ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+          UNION ALL
+          SELECT 'voice_persona_application', "id"::text, "subjectId"::text, "ownerUserId"::text, "subjectId"::text, "buildStatus"::text, "createdAt"
+          FROM "voice_persona_applications"
+          WHERE ($1 = '%%' OR "id"::text ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+          UNION ALL
+          SELECT 'data_deletion_request', "id"::text, "scope", "ownerUserId"::text, "subjectId"::text, "status"::text, "createdAt"
+          FROM "data_deletion_requests"
+          WHERE ($1 = '%%' OR "id"::text ILIKE $1 OR "ownerUserId"::text ILIKE $1)
+        ) operations
+        WHERE ($2::text IS NULL OR operations.status = $2)
+        ORDER BY created_at DESC
+        LIMIT $3
+      `,
+      [q, status, limit],
+    );
+    await this.auditService.recordSensitiveRead({
+      actorUserId,
+      resourceType: 'admin_operations_search',
+      metadata: { q: dto.q ? 'provided' : 'empty', status, limit },
+    });
+    return rows;
+  }
+
+  async getOperationsDashboard(actorUserId: string) {
+    const [row] = await this.dataSource.query(
+      `
+        SELECT
+          (SELECT count(*)::int FROM "users") AS users,
+          (SELECT count(*)::int FROM "subjects") AS subjects,
+          (SELECT count(*)::int FROM "recordings") AS recordings,
+          (SELECT count(*)::int FROM "orders") AS orders,
+          (SELECT count(*)::int FROM "entitlements") AS entitlements,
+          (SELECT count(*)::int FROM "analysis_jobs") AS analysis_jobs,
+          (SELECT count(*)::int FROM "voice_persona_applications") AS voice_persona_applications,
+          (SELECT count(*)::int FROM "data_deletion_requests") AS data_deletion_requests
+      `,
+    );
+    await this.auditService.recordSensitiveRead({
+      actorUserId,
+      resourceType: 'admin_operations_dashboard',
+      metadata: {},
+    });
+    return row;
   }
 }

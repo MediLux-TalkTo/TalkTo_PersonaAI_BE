@@ -10,6 +10,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import type { SubjectAccessActor } from '../common/permissions/subject-access';
 import { ApiCommonErrorResponses } from '../common/swagger/error-responses.decorator';
 import { success } from '../common/utils/api-response';
 import { CreateSubjectDto } from './dto/create-subject.dto';
@@ -37,7 +38,9 @@ export class SubjectsController {
     @CurrentUser() user: { userId: string },
     @Body() dto: CreateSubjectDto,
   ) {
-    return success(await this.subjectsService.create(user.userId, dto));
+    const subject = await this.subjectsService.create(user.userId, dto);
+
+    return success(this.subjectsService.toResponse(subject));
   }
 
   @Get()
@@ -45,7 +48,9 @@ export class SubjectsController {
   @ApiOkResponse({ type: SubjectListResponseDto })
   @ApiCommonErrorResponses({ badRequest: false, unauthorized: true })
   async list(@CurrentUser() user: { userId: string }) {
-    return success(await this.subjectsService.list(user.userId));
+    const subjects = await this.subjectsService.list(user.userId);
+
+    return success(this.subjectsService.toResponses(subjects));
   }
 
   @Get(':subjectId')
@@ -55,9 +60,11 @@ export class SubjectsController {
   @ApiCommonErrorResponses({ badRequest: false, unauthorized: true, notFound: true })
   async get(
     @Param('subjectId') subjectId: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: SubjectAccessActor,
   ) {
-    return success(await this.subjectsService.getOwned(subjectId, user.userId));
+    const subject = await this.subjectsService.getAccessible(subjectId, user);
+
+    return success(this.subjectsService.toResponse(subject));
   }
 
   @Patch(':subjectId')
@@ -68,10 +75,12 @@ export class SubjectsController {
   @ApiCommonErrorResponses({ badRequest: true, unauthorized: true, notFound: true })
   async update(
     @Param('subjectId') subjectId: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: SubjectAccessActor,
     @Body() dto: UpdateSubjectDto,
   ) {
-    return success(await this.subjectsService.update(subjectId, user.userId, dto));
+    const subject = await this.subjectsService.update(subjectId, user, dto);
+
+    return success(this.subjectsService.toResponse(subject));
   }
 
   @Post(':subjectId/glossary')
@@ -82,11 +91,11 @@ export class SubjectsController {
   @ApiCommonErrorResponses({ badRequest: true, unauthorized: true, notFound: true })
   async addGlossaryTerm(
     @Param('subjectId') subjectId: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: SubjectAccessActor,
     @Body() dto: UpsertGlossaryTermDto,
   ) {
     return success(
-      await this.subjectsService.addGlossaryTerm(subjectId, user.userId, dto),
+      await this.subjectsService.addGlossaryTerm(subjectId, user, dto),
     );
   }
 
@@ -99,10 +108,10 @@ export class SubjectsController {
   async removeGlossaryTerm(
     @Param('subjectId') subjectId: string,
     @Param('termId') termId: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: SubjectAccessActor,
   ) {
     return success(
-      await this.subjectsService.removeGlossaryTerm(subjectId, termId, user.userId),
+      await this.subjectsService.removeGlossaryTerm(subjectId, termId, user),
     );
   }
 }

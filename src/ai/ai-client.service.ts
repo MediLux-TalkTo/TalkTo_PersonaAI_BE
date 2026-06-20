@@ -1,5 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ConsentFeature } from '../common/enums/consent.enums';
+import {
+  ConsentsService,
+  getRequiredConsentTypes,
+} from '../consents/consents.service';
+import { DeterministicRedactor } from '../masking/deterministic-redactor';
+import {
+  ProviderCallGatewayService,
+  type ProviderCallOperation,
+} from './provider-call-gateway.service';
 
 export interface AiChatMemory {
   id: string;
@@ -40,24 +50,47 @@ export interface AiMemoryExtractResponse {
   reason?: string;
 }
 
+export interface AiProviderConsentContext {
+  readonly ownerUserId: string;
+  readonly subjectId?: string;
+  readonly feature?: ConsentFeature;
+}
+
+type RequiredConsentAsserter = Pick<ConsentsService, 'assertRequiredConsents'>;
+
 interface AiEmbedResponse {
   embedding?: number[];
 }
 
 @Injectable()
 export class AiClientService {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional()
+    @Inject(ConsentsService)
+    private readonly consentsService?: RequiredConsentAsserter,
+    @Optional()
+    @Inject(ProviderCallGatewayService)
+    private readonly providerCallGateway?: ProviderCallGatewayService,
+  ) {}
 
   isConfigured(): boolean {
     return Boolean(this.getBaseUrl());
   }
 
-  async chat(request: AiChatRequest): Promise<AiChatResponse | null> {
+  async chat(
+    request: AiChatRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiChatResponse | null> {
     if (!this.isConfigured()) {
       return null;
     }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    const response = await this.postJson<AiChatResponse>('/ai/chat', request);
+    const response = await this.postJson<AiChatResponse>(
+      '/ai/chat',
+      this.prepareProviderPayload('llm_chat', request, true),
+    );
 
     if (!response.content || typeof response.content !== 'string') {
       throw new Error('AI chat response is missing content.');
@@ -73,12 +106,19 @@ export class AiClientService {
     };
   }
 
-  async embed(text: string): Promise<number[] | null> {
+  async embed(
+    text: string,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<number[] | null> {
     if (!this.isConfigured()) {
       return null;
     }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    const response = await this.postJson<AiEmbedResponse>('/ai/embed', { text });
+    const response = await this.postJson<AiEmbedResponse>(
+      '/ai/embed',
+      this.prepareProviderPayload('embedding', { text }, true),
+    );
 
     if (!Array.isArray(response.embedding)) {
       throw new Error('AI embed response is missing embedding.');
@@ -89,18 +129,27 @@ export class AiClientService {
 
   async extractMemory(
     request: AiMemoryExtractRequest,
+    consentContext?: AiProviderConsentContext,
   ): Promise<AiMemoryExtractResponse | null> {
     if (!this.isConfigured()) {
       return null;
     }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    return this.postJson<AiMemoryExtractResponse>('/ai/memory/extract', request);
+    return this.postJson<AiMemoryExtractResponse>(
+      '/ai/memory/extract',
+      this.prepareProviderPayload('memory_extract', request, true),
+    );
   }
 
-  async transcribe(file: Express.Multer.File): Promise<string | null> {
+  async transcribe(
+    file: Express.Multer.File,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<string | null> {
     if (!this.isConfigured()) {
       return null;
     }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
     const formData = new FormData();
     const audioBytes = file.buffer.buffer.slice(
@@ -125,12 +174,22 @@ export class AiClientService {
     return sttText;
   }
 
-  async synthesizeSpeech(text: string): Promise<Buffer | null> {
+  async synthesizeSpeech(
+    text: string,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<Buffer | null> {
     if (!this.isConfigured()) {
       return null;
     }
+    await this.assertProviderConsents(
+      consentContext,
+      ConsentFeature.VOICE_PERSONA,
+    );
 
-    const response = await this.postRaw('/ai/tts', { text });
+    const response = await this.postRaw(
+      '/ai/tts',
+      this.prepareProviderPayload('voice_synthesis', { text }, true),
+    );
     const contentType = response.headers.get('content-type') ?? '';
 
     if (!contentType.includes('audio/mpeg')) {
@@ -138,6 +197,27 @@ export class AiClientService {
     }
 
     return Buffer.from(await response.arrayBuffer());
+  }
+
+  private async assertProviderConsents(
+    consentContext: AiProviderConsentContext | undefined,
+    fallbackFeature: ConsentFeature,
+  ): Promise<void> {
+    const feature = consentContext?.feature ?? fallbackFeature;
+
+    if (!consentContext || !this.consentsService) {
+      throw new ForbiddenException({
+        code: 'requires_consent',
+        message: '외부 Provider 호출에는 필요한 동의가 필요해요.',
+        missing_consent_types: getRequiredConsentTypes(feature),
+      });
+    }
+
+    await this.consentsService.assertRequiredConsents(
+      consentContext.ownerUserId,
+      feature,
+      consentContext.subjectId,
+    );
   }
 
   private async postJson<TResponse>(
@@ -211,6 +291,25 @@ export class AiClientService {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private prepareProviderPayload(
+    operation: ProviderCallOperation,
+    payload: unknown,
+    redactionRequired: boolean,
+  ): unknown {
+    return this.getProviderCallGateway().prepareJsonPayload({
+      operation,
+      payload,
+      redactionRequired,
+    }).payload;
+  }
+
+  private getProviderCallGateway(): ProviderCallGatewayService {
+    return (
+      this.providerCallGateway ??
+      new ProviderCallGatewayService(new DeterministicRedactor())
+    );
   }
 
   private buildJsonHeaders(): HeadersInit {

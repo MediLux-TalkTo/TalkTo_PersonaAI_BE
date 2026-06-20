@@ -5,12 +5,14 @@ import { Message } from '../conversations/message.entity';
 import { VoiceArtifact } from '../conversations/voice-artifact.entity';
 import { Feedback } from '../feedback/feedback.entity';
 import { User } from '../users/user.entity';
+import { AuditModule } from '../audit/audit.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { SystemLog } from './system-log.entity';
 
 @Module({
   imports: [
+    AuditModule,
     TypeOrmModule.forFeature([
       SystemLog,
       User,

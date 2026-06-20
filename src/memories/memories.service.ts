@@ -2,7 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ArrayContains, ILike, Repository } from 'typeorm';
 import { AdminService } from '../admin/admin.service';
-import { AiClientService } from '../ai/ai-client.service';
+import {
+  AiClientService,
+  AiProviderConsentContext,
+} from '../ai/ai-client.service';
+import { ConsentFeature } from '../common/enums/consent.enums';
 import {
   SystemLogCategory,
   SystemLogSeverity,
@@ -89,7 +93,7 @@ export class MemoriesService {
     const saved = await this.memoriesRepository.save(memory);
 
     await this.recordRevision(saved, MemoryRevisionAction.CREATE, null, saved, userId);
-    await this.rebuildEmbeddings(saved);
+    await this.rebuildEmbeddings(saved, userId);
 
     return this.getById(saved.id);
   }
@@ -114,7 +118,7 @@ export class MemoriesService {
       userId,
     );
     if (shouldRebuildEmbeddings) {
-      await this.rebuildEmbeddings(saved);
+      await this.rebuildEmbeddings(saved, userId);
     }
 
     return this.getById(saved.id);
@@ -140,7 +144,7 @@ export class MemoriesService {
 
   async requestReembed(userId: string, memoryId: string): Promise<Memory> {
     const memory = await this.getById(memoryId);
-    await this.rebuildEmbeddings(memory);
+    await this.rebuildEmbeddings(memory, userId);
     await this.recordRevision(
       memory,
       MemoryRevisionAction.REEMBED_REQUESTED,
@@ -152,7 +156,7 @@ export class MemoriesService {
     return this.getById(memory.id);
   }
 
-  private async rebuildEmbeddings(memory: Memory) {
+  private async rebuildEmbeddings(memory: Memory, ownerUserId: string) {
     await this.embeddingsRepository.delete({ memoryId: memory.id });
     const chunks = this.chunkMarkdown(memory.bodyMarkdown);
     if (chunks.length === 0) {
@@ -160,12 +164,13 @@ export class MemoriesService {
     }
 
     const embeddings: MemoryEmbedding[] = [];
+    const consentContext = this.buildMemoriesConsentContext(ownerUserId);
 
     for (const [chunkIndex, chunkText] of chunks.entries()) {
       let embedding: number[] | null = null;
 
       try {
-        embedding = await this.aiClientService.embed(chunkText);
+        embedding = await this.aiClientService.embed(chunkText, consentContext);
       } catch (error) {
         await this.adminService.recordLog({
           category: SystemLogCategory.MEMORY,
@@ -237,6 +242,13 @@ export class MemoriesService {
       .map((chunk) => chunk.trim())
       .filter(Boolean)
       .slice(0, 20);
+  }
+
+  private buildMemoriesConsentContext(ownerUserId: string): AiProviderConsentContext {
+    return {
+      ownerUserId,
+      feature: ConsentFeature.MEMORIES,
+    };
   }
 
   private async recordRevision(

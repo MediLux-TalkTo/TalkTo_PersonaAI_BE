@@ -1,6 +1,11 @@
 import { ChatRuntimeService } from './chat-runtime.service';
+import { ConsentFeature } from '../common/enums/consent.enums';
 
 describe('ChatRuntimeService', () => {
+  const consentContext = {
+    ownerUserId: 'owner-id',
+    feature: ConsentFeature.MEMORIES,
+  };
   const persona = {
     displayName: '우리 할머니',
   } as any;
@@ -21,6 +26,7 @@ describe('ChatRuntimeService', () => {
       userMessage: '안녕',
       memories: [memory],
       history: [],
+      consentContext,
     });
 
     expect(result.usedFallback).toBe(true);
@@ -42,6 +48,7 @@ describe('ChatRuntimeService', () => {
       userMessage: '안녕',
       memories: [memory],
       history: [],
+      consentContext,
     });
 
     expect(result.usedFallback).toBe(false);
@@ -62,19 +69,23 @@ describe('ChatRuntimeService', () => {
       userMessage: '마지막을 못 봐서 미안해',
       memories: [memory],
       history: [],
+      consentContext,
     });
 
-    expect(chat).toHaveBeenCalledWith({
-      message: '마지막을 못 봐서 미안해',
-      history: [],
-      memories: [
-        {
-          id: 'memory-1',
-          title: '불고기',
-          content: '불고기는 간장과 마늘을 넣고 만들던 기억',
-          tags: ['sensitive'],
-        },
-      ],
-    });
+    expect(chat).toHaveBeenCalledWith(
+      {
+        message: '마지막을 못 봐서 미안해',
+        history: [],
+        memories: [
+          {
+            id: 'memory-1',
+            title: '불고기',
+            content: '불고기는 간장과 마늘을 넣고 만들던 기억',
+            tags: ['sensitive'],
+          },
+        ],
+      },
+      consentContext,
+    );
   });
 });

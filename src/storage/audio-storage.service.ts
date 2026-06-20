@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { mkdir, writeFile } from 'fs/promises';
-import { randomUUID } from 'crypto';
-import { extname, isAbsolute, join } from 'path';
+import { mkdir, readFile, stat, writeFile } from 'fs/promises';
+import { createHash, randomUUID } from 'crypto';
+import { extname, isAbsolute, join, resolve, sep } from 'path';
 
 export interface StoredAudio {
   storageKey: string;
@@ -21,6 +22,19 @@ export interface UploadIntent {
   uploadUrl: string;
   expiresAt: Date;
   method: 'PUT';
+}
+
+export interface PlaybackIntent {
+  playbackUrl: string;
+  expiresAt: Date;
+  ttlSeconds: number;
+  downloadAllowed: false;
+}
+
+export interface UploadObjectVerification {
+  exists: boolean;
+  sizeBytes: number | null;
+  checksumStatus: 'verified' | 'mismatch' | 'not_supported';
 }
 
 @Injectable()
@@ -86,10 +100,7 @@ export class AudioStorageService {
     };
   }
 
-  async createPlaybackUrl(storageKey: string): Promise<{
-    playbackUrl: string;
-    expiresAt: Date;
-  }> {
+  async createPlaybackUrl(storageKey: string): Promise<PlaybackIntent> {
     const driver = this.configService.get<string>('AUDIO_STORAGE_DRIVER') ?? 'local';
     const ttlSeconds =
       this.configService.get<number>('AUDIO_SIGNED_URL_TTL_SECONDS') ?? 3600;
@@ -102,11 +113,17 @@ export class AudioStorageService {
         new GetObjectCommand({
           Bucket: this.requiredConfig('R2_BUCKET_NAME'),
           Key: storageKey,
+          ResponseContentDisposition: 'inline',
         }),
         { expiresIn: ttlSeconds },
       );
 
-      return { playbackUrl, expiresAt };
+      return {
+        playbackUrl,
+        expiresAt,
+        ttlSeconds,
+        downloadAllowed: false,
+      };
     }
 
     const publicPath =
@@ -114,7 +131,23 @@ export class AudioStorageService {
     return {
       playbackUrl: `${this.normalizePublicPath(publicPath)}/${storageKey}`,
       expiresAt,
+      ttlSeconds,
+      downloadAllowed: false,
     };
+  }
+
+  async verifyUploadObject(params: {
+    storageKey: string;
+    expectedSizeBytes: number;
+    expectedChecksum?: string | null;
+  }): Promise<UploadObjectVerification> {
+    const driver = this.configService.get<string>('AUDIO_STORAGE_DRIVER') ?? 'local';
+
+    if (driver === 'r2') {
+      return this.verifyR2UploadObject(params);
+    }
+
+    return this.verifyLocalUploadObject(params);
   }
 
   private async saveLocalMp3(params: {
@@ -145,6 +178,88 @@ export class AudioStorageService {
       url: `${this.normalizePublicPath(publicPath)}/${safeConversationId}/${filename}`,
       expiresAt: new Date(Date.now() + ttlSeconds * 1000),
     };
+  }
+
+  private async verifyLocalUploadObject(params: {
+    storageKey: string;
+    expectedChecksum?: string | null;
+  }): Promise<UploadObjectVerification> {
+    const storageRoot =
+      this.configService.get<string>('LOCAL_AUDIO_STORAGE_DIR') ?? 'storage/audio';
+    const absoluteRoot = isAbsolute(storageRoot)
+      ? resolve(storageRoot)
+      : resolve(process.cwd(), storageRoot);
+    const absolutePath = resolve(absoluteRoot, params.storageKey);
+
+    if (
+      absolutePath !== absoluteRoot &&
+      !absolutePath.startsWith(`${absoluteRoot}${sep}`)
+    ) {
+      throw new Error('Upload object path escapes local audio storage root.');
+    }
+
+    try {
+      const objectStat = await stat(absolutePath);
+      if (!objectStat.isFile()) {
+        return {
+          exists: false,
+          sizeBytes: null,
+          checksumStatus: 'not_supported',
+        };
+      }
+
+      return {
+        exists: true,
+        sizeBytes: objectStat.size,
+        checksumStatus: await this.verifyLocalChecksum(
+          absolutePath,
+          params.expectedChecksum,
+        ),
+      };
+    } catch (error) {
+      if (this.isMissingLocalObject(error)) {
+        return {
+          exists: false,
+          sizeBytes: null,
+          checksumStatus: 'not_supported',
+        };
+      }
+      throw error;
+    }
+  }
+
+  private async verifyR2UploadObject(params: {
+    storageKey: string;
+    expectedChecksum?: string | null;
+  }): Promise<UploadObjectVerification> {
+    const s3 = this.buildR2Client();
+
+    try {
+      const metadata = await s3.send(
+        new HeadObjectCommand({
+          Bucket: this.requiredConfig('R2_BUCKET_NAME'),
+          Key: params.storageKey,
+        }),
+      );
+
+      return {
+        exists: true,
+        sizeBytes: metadata.ContentLength ?? null,
+        checksumStatus: this.verifyProvidedChecksum(
+          params.expectedChecksum,
+          metadata.ChecksumSHA256 ?? null,
+        ),
+      };
+    } catch (error) {
+      if (this.isMissingR2Object(error)) {
+        return {
+          exists: false,
+          sizeBytes: null,
+          checksumStatus: 'not_supported',
+        };
+      }
+      throw error;
+    }
   }
 
   private async saveR2Mp3(params: {
@@ -182,6 +297,54 @@ export class AudioStorageService {
       url,
       expiresAt: new Date(Date.now() + ttlSeconds * 1000),
     };
+  }
+
+  private async verifyLocalChecksum(
+    absolutePath: string,
+    expectedChecksum?: string | null,
+  ): Promise<UploadObjectVerification['checksumStatus']> {
+    const expectedSha256 = this.normalizeSha256(expectedChecksum);
+    if (!expectedSha256) {
+      return 'not_supported';
+    }
+
+    const actualSha256 = createHash('sha256')
+      .update(await readFile(absolutePath))
+      .digest('hex');
+
+    return actualSha256 === expectedSha256 ? 'verified' : 'mismatch';
+  }
+
+  private verifyProvidedChecksum(
+    expectedChecksum?: string | null,
+    providerChecksum?: string | null,
+  ): UploadObjectVerification['checksumStatus'] {
+    const expectedSha256 = this.normalizeSha256(expectedChecksum);
+    if (!expectedSha256 || !providerChecksum) {
+      return 'not_supported';
+    }
+
+    return providerChecksum === expectedSha256 ? 'verified' : 'mismatch';
+  }
+
+  private normalizeSha256(checksum?: string | null): string | null {
+    if (!checksum?.startsWith('sha256:')) {
+      return null;
+    }
+
+    return checksum.slice('sha256:'.length).toLowerCase();
+  }
+
+  private isMissingLocalObject(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+  }
+
+  private isMissingR2Object(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    return error.name === 'NotFound' || error.name === 'NoSuchKey';
   }
 
   private buildR2Client(): S3Client {

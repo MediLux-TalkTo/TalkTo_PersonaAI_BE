@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { AdminService } from '../admin/admin.service';
-import { AiClientService } from '../ai/ai-client.service';
+import {
+  AiClientService,
+  AiProviderConsentContext,
+} from '../ai/ai-client.service';
 import {
   SystemLogCategory,
   SystemLogSeverity,
@@ -22,7 +25,10 @@ export class MemoryRetrievalService {
     private readonly memoryEmbeddingsRepository: Repository<MemoryEmbedding>,
   ) {}
 
-  async retrieve(query: string): Promise<Memory[]> {
+  async retrieve(
+    query: string,
+    consentContext: AiProviderConsentContext,
+  ): Promise<Memory[]> {
     const trimmed = query.trim();
 
     if (!trimmed) {
@@ -33,7 +39,7 @@ export class MemoryRetrievalService {
       });
     }
 
-    const vectorMatches = await this.retrieveByVector(trimmed);
+    const vectorMatches = await this.retrieveByVector(trimmed, consentContext);
 
     if (vectorMatches.length > 0) {
       return vectorMatches;
@@ -53,11 +59,14 @@ export class MemoryRetrievalService {
     });
   }
 
-  private async retrieveByVector(query: string): Promise<Memory[]> {
+  private async retrieveByVector(
+    query: string,
+    consentContext: AiProviderConsentContext,
+  ): Promise<Memory[]> {
     let queryEmbedding: number[] | null = null;
 
     try {
-      queryEmbedding = await this.aiClientService.embed(query);
+      queryEmbedding = await this.aiClientService.embed(query, consentContext);
     } catch (error) {
       await this.adminService.recordLog({
         category: SystemLogCategory.MEMORY,

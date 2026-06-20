@@ -39,6 +39,13 @@ export interface RuntimeEnv {
   ADMIN_EMAIL: string;
   ADMIN_PASSWORD: string;
   BOOTSTRAP_SEED: boolean;
+  FREE_ARCHIVE_AI_SUMMARY_ENABLED: boolean;
+  FREE_PREVIEW_ANALYSIS_ENABLED: boolean;
+  S10_PREVIEW_SCREEN_ENABLED: boolean;
+  GENERATED_VOICE_DOWNLOAD_ENABLED: boolean;
+  PAYMENT_PROVIDER: string;
+  PAYMENT_WEBHOOK_SECRET: string;
+  PAYMENT_WEBHOOK_TOLERANCE_SECONDS: number;
 }
 
 export function validateEnv(config: EnvSource): RuntimeEnv {
@@ -145,6 +152,50 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
       errors,
     ),
     BOOTSTRAP_SEED: readBoolean(config, 'BOOTSTRAP_SEED', false, errors),
+    FREE_ARCHIVE_AI_SUMMARY_ENABLED: readBoolean(
+      config,
+      'FREE_ARCHIVE_AI_SUMMARY_ENABLED',
+      false,
+      errors,
+    ),
+    FREE_PREVIEW_ANALYSIS_ENABLED: readBoolean(
+      config,
+      'FREE_PREVIEW_ANALYSIS_ENABLED',
+      false,
+      errors,
+    ),
+    S10_PREVIEW_SCREEN_ENABLED: readBoolean(
+      config,
+      'S10_PREVIEW_SCREEN_ENABLED',
+      false,
+      errors,
+    ),
+    GENERATED_VOICE_DOWNLOAD_ENABLED: readBoolean(
+      config,
+      'GENERATED_VOICE_DOWNLOAD_ENABLED',
+      false,
+      errors,
+    ),
+    PAYMENT_PROVIDER: readEnum(
+      config,
+      'PAYMENT_PROVIDER',
+      ['local'],
+      'local',
+      errors,
+    ),
+    PAYMENT_WEBHOOK_SECRET: readString(
+      config,
+      'PAYMENT_WEBHOOK_SECRET',
+      'local-payment-webhook-secret',
+      errors,
+    ),
+    PAYMENT_WEBHOOK_TOLERANCE_SECONDS: readNumber(
+      config,
+      'PAYMENT_WEBHOOK_TOLERANCE_SECONDS',
+      300,
+      errors,
+      { min: 30, max: 900 },
+    ),
   };
 
   if (validatedEnv.AUDIO_STORAGE_DRIVER === 'r2') {
@@ -169,6 +220,31 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
         'JWT_REFRESH_SECRET must not use the default placeholder in production.',
       );
     }
+    if (validatedEnv.PAYMENT_WEBHOOK_SECRET === 'local-payment-webhook-secret') {
+      errors.push(
+        'PAYMENT_WEBHOOK_SECRET must not use the default placeholder in production.',
+      );
+    }
+    rejectEnabledProductionFlag(
+      validatedEnv.FREE_ARCHIVE_AI_SUMMARY_ENABLED,
+      'FREE_ARCHIVE_AI_SUMMARY_ENABLED',
+      errors,
+    );
+    rejectEnabledProductionFlag(
+      validatedEnv.FREE_PREVIEW_ANALYSIS_ENABLED,
+      'FREE_PREVIEW_ANALYSIS_ENABLED',
+      errors,
+    );
+    rejectEnabledProductionFlag(
+      validatedEnv.S10_PREVIEW_SCREEN_ENABLED,
+      'S10_PREVIEW_SCREEN_ENABLED',
+      errors,
+    );
+    rejectEnabledProductionFlag(
+      validatedEnv.GENERATED_VOICE_DOWNLOAD_ENABLED,
+      'GENERATED_VOICE_DOWNLOAD_ENABLED',
+      errors,
+    );
   }
 
   if (errors.length > 0) {
@@ -176,6 +252,16 @@ export function validateEnv(config: EnvSource): RuntimeEnv {
   }
 
   return validatedEnv;
+}
+
+function rejectEnabledProductionFlag(
+  value: boolean,
+  key: string,
+  errors: string[],
+) {
+  if (value) {
+    errors.push(`${key} must remain false in production.`);
+  }
 }
 
 function requireDefined(

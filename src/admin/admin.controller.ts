@@ -6,6 +6,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -19,12 +20,13 @@ import {
 } from './dto/admin-response.dto';
 import { QueryFeedbackReviewsDto } from './dto/query-feedback-reviews.dto';
 import { QueryErrorLogsDto } from './dto/query-error-logs.dto';
+import { QueryOperationsSearchDto } from './dto/query-operations.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.OPS)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -62,5 +64,22 @@ export class AdminController {
   @ApiOkResponse({ type: SystemLogListResponseDto })
   async getErrorLogs(@Query() query: QueryErrorLogsDto) {
     return success(await this.adminService.getErrorLogs(query));
+  }
+
+  @Get('operations/search')
+  @ApiOperation({ summary: 'Search v1 operations resources' })
+  @ApiOkResponse()
+  async searchOperations(
+    @CurrentUser() user: { userId: string },
+    @Query() query: QueryOperationsSearchDto,
+  ) {
+    return success(await this.adminService.searchOperations(user.userId, query));
+  }
+
+  @Get('operations/dashboard')
+  @ApiOperation({ summary: 'Get v1 operations dashboard counts' })
+  @ApiOkResponse()
+  async getOperationsDashboard(@CurrentUser() user: { userId: string }) {
+    return success(await this.adminService.getOperationsDashboard(user.userId));
   }
 }

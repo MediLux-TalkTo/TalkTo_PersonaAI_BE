@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +10,12 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import {
+  RecordingUploadPlatform,
+  RecordingUploadSource,
+  recordingUploadPlatformValues,
+  recordingUploadSourceValues,
+} from '../upload-intent.constants';
 
 export class CreateRecordingUploadIntentDto {
   @ApiProperty({ example: 'subject-uuid' })
@@ -59,4 +67,25 @@ export class CreateRecordingUploadIntentDto {
   @IsString()
   @MaxLength(255)
   fileHash?: string;
+
+  @ApiPropertyOptional({
+    enum: recordingUploadSourceValues,
+    example: RecordingUploadSource.APP_RECORDING,
+  })
+  @IsOptional()
+  @IsIn(recordingUploadSourceValues)
+  source?: string;
+
+  @ApiPropertyOptional({
+    enum: recordingUploadPlatformValues,
+    example: RecordingUploadPlatform.IOS,
+  })
+  @IsOptional()
+  @IsIn(recordingUploadPlatformValues)
+  platform?: string;
+
+  @ApiPropertyOptional({ example: true, default: true })
+  @IsOptional()
+  @IsBoolean()
+  singleFile?: boolean;
 }

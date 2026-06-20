@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   AiChatHistoryItem,
   AiClientService,
+  AiProviderConsentContext,
 } from '../ai/ai-client.service';
 import { Memory } from '../memories/memory.entity';
 import { Persona } from '../personas/persona.entity';
@@ -22,6 +23,7 @@ export class ChatRuntimeService {
     userMessage: string;
     memories: Memory[];
     history: AiChatHistoryItem[];
+    consentContext: AiProviderConsentContext;
   }): Promise<AssistantReplyResult> {
     const startedAt = Date.now();
     const aiResponse = await this.aiClientService.chat({
@@ -33,7 +35,7 @@ export class ChatRuntimeService {
         content: memory.bodyMarkdown,
         tags: memory.tags ?? [],
       })),
-    });
+    }, params.consentContext);
 
     if (!aiResponse) {
       return {

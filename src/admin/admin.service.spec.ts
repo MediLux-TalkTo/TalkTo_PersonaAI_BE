@@ -10,6 +10,7 @@ import { Feedback } from '../feedback/feedback.entity';
 import { User } from '../users/user.entity';
 import { AdminService } from './admin.service';
 import { SystemLog } from './system-log.entity';
+import { AuditService } from '../audit/audit.service';
 
 describe('AdminService', () => {
   const repository = () => ({
@@ -26,8 +27,12 @@ describe('AdminService', () => {
   let voiceArtifactsRepository: ReturnType<typeof repository>;
   let feedbackRepository: ReturnType<typeof repository>;
   let dataSource: { query: jest.Mock };
+  const auditService = {
+    recordSensitiveRead: jest.fn(),
+  };
 
   beforeEach(async () => {
+    jest.resetAllMocks();
     dataSource = {
       query: jest.fn(),
     };
@@ -47,6 +52,7 @@ describe('AdminService', () => {
         { provide: getRepositoryToken(Message), useValue: messagesRepository },
         { provide: getRepositoryToken(VoiceArtifact), useValue: voiceArtifactsRepository },
         { provide: getRepositoryToken(Feedback), useValue: feedbackRepository },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
 
@@ -229,5 +235,60 @@ describe('AdminService', () => {
       },
       take: 10,
     });
+  });
+
+  it('searches v1 operations resources and audits the sensitive read', async () => {
+    dataSource.query.mockResolvedValue([
+      {
+        type: 'subject',
+        id: 'subject-id',
+        label: 'Grandma',
+        owner_user_id: 'owner-id',
+        subject_id: 'subject-id',
+        status: 'READY',
+        created_at: new Date('2026-06-18T00:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.searchOperations('admin-id', { q: 'Grand', limit: 5 }),
+    ).resolves.toHaveLength(1);
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining('entitlement'), [
+      '%Grand%',
+      null,
+      5,
+    ]);
+    expect(auditService.recordSensitiveRead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: 'admin-id',
+        resourceType: 'admin_operations_search',
+      }),
+    );
+  });
+
+  it('returns v1 operations dashboard counts and audits the read', async () => {
+    dataSource.query.mockResolvedValue([
+      {
+        users: 1,
+        subjects: 2,
+        recordings: 3,
+        orders: 4,
+        entitlements: 5,
+        analysis_jobs: 6,
+        voice_persona_applications: 7,
+        data_deletion_requests: 8,
+      },
+    ]);
+
+    await expect(service.getOperationsDashboard('admin-id')).resolves.toMatchObject({
+      users: 1,
+      data_deletion_requests: 8,
+    });
+    expect(auditService.recordSensitiveRead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: 'admin-id',
+        resourceType: 'admin_operations_dashboard',
+      }),
+    );
   });
 });

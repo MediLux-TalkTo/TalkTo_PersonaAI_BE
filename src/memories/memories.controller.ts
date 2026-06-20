@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -15,6 +26,15 @@ import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { success } from '../common/utils/api-response';
+import {
+  MemoriesSearchResponseDto,
+  MemoriesStatusResponseDto,
+} from '../memories-search/dto/memories-search-response.dto';
+import {
+  MemoriesStatusQueryDto,
+  SearchMemoriesDto,
+} from '../memories-search/dto/memories-search.dto';
+import { MemoriesSearchService } from '../memories-search/memories-search.service';
 import { CreateMemoryDto } from './dto/create-memory.dto';
 import { MemoryListResponseDto, MemoryResponseDto } from './dto/memory-response.dto';
 import { QueryMemoriesDto } from './dto/query-memories.dto';
@@ -26,7 +46,10 @@ import { MemoriesService } from './memories.service';
 @UseGuards(JwtAuthGuard)
 @Controller('memories')
 export class MemoriesController {
-  constructor(private readonly memoriesService: MemoriesService) {}
+  constructor(
+    private readonly memoriesService: MemoriesService,
+    private readonly memoriesSearchService: MemoriesSearchService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -37,6 +60,34 @@ export class MemoriesController {
   @ApiCommonErrorResponses({ badRequest: true, unauthorized: true })
   async list(@Query() query: QueryMemoriesDto) {
     return success(await this.memoriesService.list(query));
+  }
+
+  @Get('status')
+  @ApiOperation({ summary: 'Paid Memories search readiness status' })
+  @ApiOkResponse({ type: MemoriesStatusResponseDto })
+  @ApiCommonErrorResponses()
+  async getStatus(
+    @CurrentUser() currentUser: { userId: string },
+    @Query() query: MemoriesStatusQueryDto,
+  ) {
+    return success(
+      await this.memoriesSearchService.getStatus(currentUser.userId, query),
+    );
+  }
+
+  @Post('search')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Search paid Memories over analyzed Archive segments' })
+  @ApiBody({ type: SearchMemoriesDto })
+  @ApiOkResponse({ type: MemoriesSearchResponseDto })
+  @ApiCommonErrorResponses({ forbidden: true })
+  async search(
+    @CurrentUser() currentUser: { userId: string },
+    @Body() dto: SearchMemoriesDto,
+  ) {
+    return success(
+      await this.memoriesSearchService.search(currentUser.userId, dto),
+    );
   }
 
   @Get(':memoryId')

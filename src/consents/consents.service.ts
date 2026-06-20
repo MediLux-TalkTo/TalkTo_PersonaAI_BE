@@ -6,6 +6,7 @@ import {
   ConsentStatus,
   ConsentType,
 } from '../common/enums/consent.enums';
+import { AppEventsService } from '../events/events.service';
 import { SubjectsService } from '../subjects/subjects.service';
 import { AcceptConsentsDto } from './dto/accept-consents.dto';
 import { CreateConsentDto } from './dto/create-consent.dto';
@@ -82,12 +83,21 @@ const CONSENT_REQUIREMENTS: Record<ConsentFeature, readonly ConsentRequirement[]
   ],
 };
 
+export function getRequiredConsentTypes(
+  feature: ConsentFeature,
+): readonly ConsentType[] {
+  return CONSENT_REQUIREMENTS[feature]
+    .filter((requirement) => requirement.required)
+    .map((requirement) => requirement.consent_type);
+}
+
 @Injectable()
 export class ConsentsService {
   constructor(
     @InjectRepository(Consent)
     private readonly consentsRepository: Repository<Consent>,
     private readonly subjectsService: SubjectsService,
+    private readonly appEventsService: AppEventsService,
   ) {}
 
   async getLatest(userId: string): Promise<Consent | null> {
@@ -154,6 +164,18 @@ export class ConsentsService {
     const savedConsents = await this.consentsRepository.save(consents);
     const acceptedFeatures = [...new Set(savedConsents.map((consent) => consent.feature))]
       .filter((feature): feature is ConsentFeature => Boolean(feature));
+    await this.appEventsService.emit({
+      userId,
+      name: 'consent.accepted',
+      subjectId: dto.subject_id,
+      payload: {
+        acceptedFeatures,
+        consentTypes: savedConsents
+          .map((consent) => consent.consentType)
+          .filter((consentType): consentType is ConsentType => Boolean(consentType)),
+        count: savedConsents.length,
+      },
+    });
 
     return {
       accepted_features: acceptedFeatures,

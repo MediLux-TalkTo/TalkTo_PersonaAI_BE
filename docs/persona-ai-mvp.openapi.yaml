@@ -2,21 +2,66 @@ openapi: 3.0.3
 info:
   title: TalkTo Persona AI MVP API
   version: 0.1.0
-  description: Backend MVP API design for Persona AI.
+  description: |
+    Backend MVP API design for Persona AI.
+
+    v1.0 source priority: TalkTo_개발자용_기능명세서_v1.0.md overrides older Notion rows,
+    pasted planning notes, and the legacy MVP baseline where they conflict.
+
+    Current implemented surface: legacy Persona Chat MVP plus Archive-first
+    subjects, purpose consents, question cards/interactions, recording upload,
+    recording completion, recording list/detail, original recording playback,
+    payment products/orders/webhooks/entitlements, and queued paid Archive
+    analysis jobs, analysis job status APIs, audited admin retry hooks, and
+    admin worker transition endpoints for paid analysis jobs, and paid Memories
+    status/search plus segment playback/feedback over indexed analysis segments,
+    in-app analysis status notifications, and R&D redacted export opt-in/preview
+    guardrails, plus Voice Persona application core routes.
+
+    Guardrails: free Archive upload/completion must not create Preview, STT,
+    LLM summary, embedding, memory segment, or analysis job work. Preview/sample
+    analysis is deferred/disabled by v1.0. POST
+    /api/v1/recordings/{recordingId}/preview-analysis exists only as a disabled
+    compatibility endpoint returning 409 feature_deferred and must not enqueue
+    Preview, free AI, or analysis job work.
+
+    Not yet implemented: automated provider execution for analysis workers,
+    Voice Persona status notifications.
 servers:
-  - url: https://talkto-personaai-be.onrender.com
-    description: Render MVP deployment
   - url: http://localhost:3000
     description: Local development
 tags:
   - name: Auth
   - name: Consent
+    description: Purpose consent requirements and acceptance for Archive, paid Memories, and future Voice Persona gates.
   - name: Subjects
   - name: Question Cards
   - name: Recordings
+    description: Free Archive recording storage/playback only; no Preview, STT, summary, embedding, memory segment, or analysis job is created.
   - name: Persona
+    description: Legacy active persona profile, not the v1.0 Voice Persona build/runtime package.
   - name: Conversations
+    description: Legacy Persona Chat text/voice runtime, not the v1.0 Voice Persona runtime.
   - name: Memories
+    description: Legacy memory CRUD plus paid v1.0 Memories status/search over analyzed Archive segments. Legacy CRUD rows are not paid search results.
+  - name: Memory Segments
+    description: Owner-only playback URLs and feedback for paid Memories search result segments.
+  - name: Notifications
+    description: In-app notification rows for status changes. Current implementation covers paid analysis completion/failure.
+  - name: Data Rights
+    description: User data-rights controls and admin dry-run previews for redacted research export eligibility.
+  - name: Voice Persona
+    description: v1.0 Voice Persona build application, review, and runtime-enablement surfaces. Runtime messaging uses the Persona Runtime tag.
+  - name: Persona Runtime
+    description: Gated v1.0 Voice Persona runtime sessions/messages. Separate from legacy Conversations.
+  - name: Orders
+    description: Paid product checkout orders. Memories orders require a target recording.
+  - name: Payments
+    description: Verified payment webhooks create entitlements and queue paid analysis jobs for Memories orders.
+  - name: Entitlements
+    description: Active paid feature access granted after verified payment.
+  - name: Analysis
+    description: Durable paid analysis job state, retry/status surface, and admin worker transition endpoints. Transition endpoints persist worker-supplied artifacts; they do not run provider STT, LLM, redaction, segmentation, embedding, or Memories search workers.
   - name: Feedback
   - name: Admin
 security:
@@ -193,17 +238,65 @@ paths:
       responses:
         '201':
           description: Question interaction recorded
+  /api/v1/upload-guide:
+    get:
+      tags: [Recordings]
+      summary: Get recording upload guide
+      description: Returns supported audio MIME types, max upload size, single-file guidance, allowed upload sources/platforms, upload intent lifecycle values, failure codes, and checksum statuses.
+      responses:
+        '200':
+          description: Recording upload guide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingUploadGuideResponse'
   /api/v1/recordings/upload-intent:
     post:
       tags: [Recordings]
       summary: Create recording upload intent
+      description: Creates a recording row and a presigned upload target. Free Archive upload does not create Preview, STT, summary, embedding, memory segment, or analysis jobs.
       responses:
         '201':
           description: Recording upload intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingUploadIntentResponse'
+  /api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/retry:
+    post:
+      tags: [Recordings]
+      summary: Retry recording upload intent
+      description: Creates a fresh upload intent for a failed, canceled, or expired upload intent and returns the new upload URL, storage key, expiry, uploadIntentId, and current recording. Returns retry_not_allowed when the current intent is not retryable.
+      parameters:
+        - $ref: '#/components/parameters/RecordingId'
+        - $ref: '#/components/parameters/UploadIntentId'
+      responses:
+        '200':
+          description: Fresh recording upload intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingUploadIntentResponse'
+  /api/v1/recordings/{recordingId}/upload-intents/{uploadIntentId}/cancel:
+    post:
+      tags: [Recordings]
+      summary: Cancel recording upload intent
+      description: Cancels an in-progress upload intent with upload_canceled. If the intent is already completed, failed, canceled, or expired, the backend preserves the terminal state and returns the current intent response.
+      parameters:
+        - $ref: '#/components/parameters/RecordingId'
+        - $ref: '#/components/parameters/UploadIntentId'
+      responses:
+        '200':
+          description: Current or cancelled upload intent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordingUploadIntentStateResponse'
   /api/v1/recordings/{recordingId}/complete:
     post:
       tags: [Recordings]
       summary: Mark recording upload complete
+      description: Marks uploadStatus as uploaded/archive_status as archived and keeps analysis_stage not_analyzed, summary_status locked_until_memories, and memories_status locked_until_memories; free Archive completion must not create Preview, STT, summary, embedding, memory segment, or analysis jobs.
       responses:
         '200':
           description: Recording upload completed
@@ -228,6 +321,886 @@ paths:
       responses:
         '200':
           description: Playback URL issued
+  /api/v1/recordings/{recordingId}/preview-analysis:
+    post:
+      tags: [Recordings]
+      summary: Disabled Preview analysis compatibility endpoint
+      description: Exists only for compatibility while Preview/sample analysis is deferred in v1.0. Always returns 409 feature_deferred and does not create Preview, free AI, STT, summary, embedding, memory segment, or analysis job work.
+      parameters:
+        - $ref: '#/components/parameters/RecordingId'
+      responses:
+        '409':
+          description: Preview analysis is deferred for v1.0.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: feature_deferred
+                      message:
+                        type: string
+                        example: Preview analysis is deferred for v1.0.
+                      details:
+                        type: object
+                        properties:
+                          feature:
+                            type: string
+                            example: preview_analysis
+                          retryable:
+                            type: boolean
+                            example: false
+                  meta:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+  /api/v1/orders:
+    post:
+      tags: [Orders]
+      summary: Create pending checkout order
+      description: Creates a pending local checkout order. Memories orders require targetRecordingId and required Memories consents before checkout; no analysis job is created until the verified payment webhook grants an active entitlement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Pending checkout order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOrderResponse'
+  /api/v1/payments/local/webhook:
+    post:
+      tags: [Payments]
+      security: []
+      summary: Receive signed local payment webhook
+      description: Verifies the local payment webhook signature and event id before mutating order state. For a payment.succeeded Memories order, creates an active entitlement and queues a paid analysis job for the order target recording after entitlement, consent, archived recording, and duplicate active-job guards pass.
+      responses:
+        '200':
+          description: Payment webhook processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentWebhookResponse'
+  /api/v1/entitlements:
+    get:
+      tags: [Entitlements]
+      summary: List current active entitlements
+      responses:
+        '200':
+          description: Active entitlements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementsResponse'
+  /api/v1/memories/status:
+    get:
+      tags: [Memories]
+      summary: Get paid Memories search readiness
+      description: Returns active Memories entitlement state and whether indexed analysis memory segments are available for paid search. This is separate from legacy memory CRUD.
+      parameters:
+        - in: query
+          name: subjectId
+          schema:
+            type: string
+            format: uuid
+          description: Restrict index readiness counts to one subject.
+      responses:
+        '200':
+          description: Paid Memories readiness status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoriesStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/memories/search:
+    post:
+      tags: [Memories]
+      summary: Search paid Memories over analyzed Archive segments
+      description: Requires an active Memories entitlement and required Memories purpose consent. Searches owned memory segments created by completed paid analysis and optional stored embeddings; it does not search legacy memory CRUD rows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoriesSearchRequest'
+      responses:
+        '200':
+          description: Paid Memories search result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoriesSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/memory-segments/{memorySegmentId}/playback-url:
+    post:
+      tags: [Memory Segments]
+      summary: Issue a segment-scoped playback URL
+      description: Returns a short-lived original-audio playback URL with media-fragment start/end semantics and downloadAllowed=false. Owner-only access is enforced and the sensitive read is audited.
+      parameters:
+        - in: path
+          name: memorySegmentId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemorySegmentPlaybackRequest'
+      responses:
+        '201':
+          description: Segment playback URL issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemorySegmentPlaybackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/memory-segments/{memorySegmentId}/feedback:
+    post:
+      tags: [Memory Segments]
+      summary: Submit feedback for a Memories segment
+      description: Upserts rating/tags/comment and optional reported timestamp corrections for an owned paid Memories result segment.
+      parameters:
+        - in: path
+          name: memorySegmentId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemorySegmentFeedbackRequest'
+      responses:
+        '201':
+          description: Segment feedback saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemorySegmentFeedbackResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      summary: List current user notifications
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: unreadOnly
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Current user notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/{notificationId}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      parameters:
+        - in: path
+          name: notificationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/data-rights/research-export:
+    get:
+      tags: [Data Rights]
+      summary: Get research export opt-in preference
+      responses:
+        '200':
+          description: Current preference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchExportPreferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/data-rights/research-export/opt-in:
+    post:
+      tags: [Data Rights]
+      summary: Opt in to redacted research export eligibility
+      responses:
+        '201':
+          description: Opt-in preference saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchExportPreferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/data-rights/research-export/withdraw:
+    post:
+      tags: [Data Rights]
+      summary: Withdraw research export opt-in
+      responses:
+        '201':
+          description: Opt-in withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchExportPreferenceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/data-deletion-requests:
+    post:
+      tags: [Data Rights]
+      summary: Create a strongly confirmed data deletion request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDataDeletionRequest'
+      responses:
+        '201':
+          description: Data deletion request created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/admin/data-rights/research-export-preview:
+    get:
+      tags: [Admin, Data Rights]
+      summary: Preview redacted research export eligible rows
+      description: Dry-run preview for admin/ops users. Returns only opted-in memory segment identifiers, timestamps, eligibility state, and redacted text when a successful redaction exists. Raw audio keys, presigned URLs, raw transcripts, and raw memory text are not returned.
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: subjectId
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Redacted export preview rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResearchExportPreviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/data-deletion-requests/{requestId}:
+    patch:
+      tags: [Admin, Data Rights]
+      summary: Update data deletion request status
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDataDeletionRequest'
+      responses:
+        '200':
+          description: Deletion request updated
+  /api/v1/admin/provider-deletion-records/{recordId}:
+    patch:
+      tags: [Admin, Data Rights]
+      summary: Update provider deletion tracking status
+      parameters:
+        - in: path
+          name: recordId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProviderDeletionRecord'
+      responses:
+        '200':
+          description: Provider deletion record updated
+  /api/v1/voice-persona/applications:
+    post:
+      tags: [Voice Persona]
+      summary: Create a Voice Persona build application
+      description: Requires subject ownership, required Voice Persona consents, and an active Voice Persona entitlement. Creates a locked build application and locked build job; it does not enable runtime chat.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVoicePersonaApplicationRequest'
+      responses:
+        '201':
+          description: Voice Persona application created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoicePersonaApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/voice-persona/applications/{applicationId}/documents/upload-intent:
+    post:
+      tags: [Voice Persona]
+      summary: Create a Voice Persona evidence document upload intent
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVoicePersonaDocumentIntentRequest'
+      responses:
+        '201':
+          description: Document upload intent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoicePersonaDocumentIntentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/voice-persona/applications/{applicationId}/intake:
+    put:
+      tags: [Voice Persona]
+      summary: Save Voice Persona intake draft sections
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPersonaIntakeRequest'
+      responses:
+        '200':
+          description: Intake draft saved
+  /api/v1/voice-persona/applications/{applicationId}/intake/submit:
+    post:
+      tags: [Voice Persona]
+      summary: Submit complete 8-section Persona intake
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      responses:
+        '200':
+          description: Intake submitted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/voice-persona/applications/{applicationId}/voice-samples:
+    post:
+      tags: [Voice Persona]
+      summary: Submit target voice sample for ops review
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTargetVoiceSampleRequest'
+      responses:
+        '201':
+          description: Target voice sample submitted
+  /api/v1/voice-persona/applications/{applicationId}/build-status:
+    get:
+      tags: [Voice Persona]
+      summary: Get Voice Persona build status lock reasons
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      responses:
+        '200':
+          description: Voice Persona build status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonaBuildStatusResponse'
+  /api/v1/voice-persona/applications/{applicationId}/family-review:
+    get:
+      tags: [Voice Persona]
+      summary: Get family-safe Persona Bible review view
+      description: Returns only approved Persona Bible summary/safety notes for owner review. Raw evidence, recordings, transcripts, and provider payloads are not returned.
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      responses:
+        '200':
+          description: Family review view
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/voice-persona/applications/{applicationId}/family-review/approve:
+    post:
+      tags: [Voice Persona]
+      summary: Approve family review and enable runtime config when gates pass
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      responses:
+        '200':
+          description: Review approved and runtime config enabled if all gates pass
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/voice-persona/applications/{applicationId}/family-review/request-changes:
+    post:
+      tags: [Voice Persona]
+      summary: Request Persona Bible changes before runtime enablement
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestPersonaBibleChangesRequest'
+      responses:
+        '200':
+          description: Change request persisted
+  /api/v1/admin/voice-persona/documents/{documentId}/review:
+    patch:
+      tags: [Admin, Voice Persona]
+      summary: Review Voice Persona evidence document
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewVoicePersonaAssetRequest'
+      responses:
+        '200':
+          description: Document reviewed
+  /api/v1/admin/voice-persona/voice-samples/{sampleId}/review:
+    patch:
+      tags: [Admin, Voice Persona]
+      summary: Review target voice sample
+      parameters:
+        - in: path
+          name: sampleId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewVoicePersonaAssetRequest'
+      responses:
+        '200':
+          description: Voice sample reviewed
+  /api/v1/admin/voice-persona/applications/{applicationId}/build-status:
+    patch:
+      tags: [Admin, Voice Persona]
+      summary: Manually update Voice Persona build status
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePersonaBuildStatusRequest'
+      responses:
+        '200':
+          description: Build status updated
+  /api/v1/admin/voice-persona/applications/{applicationId}/persona-bible:
+    put:
+      tags: [Admin, Voice Persona]
+      summary: Create or update Persona Bible draft
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPersonaBibleRequest'
+      responses:
+        '200':
+          description: Persona Bible saved
+  /api/v1/admin/voice-persona/persona-bibles/{bibleId}/review:
+    patch:
+      tags: [Admin, Voice Persona]
+      summary: Review Persona Bible
+      parameters:
+        - in: path
+          name: bibleId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewVoicePersonaAssetRequest'
+      responses:
+        '200':
+          description: Persona Bible reviewed
+  /api/v1/admin/voice-persona/applications/{applicationId}/provider-assets:
+    post:
+      tags: [Admin, Voice Persona]
+      summary: Register manual voice provider asset
+      parameters:
+        - $ref: '#/components/parameters/VoicePersonaApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterVoiceProviderAssetRequest'
+      responses:
+        '200':
+          description: Provider asset registered
+  /api/v1/persona/sessions:
+    post:
+      tags: [Persona Runtime]
+      summary: Create a gated Voice Persona runtime session
+      description: Requires enabled runtime config and Voice Persona consent. This route is separate from legacy /conversations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersonaRuntimeSessionRequest'
+      responses:
+        '201':
+          description: Runtime session created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/persona/sessions/{sessionId}/messages:
+    post:
+      tags: [Persona Runtime]
+      summary: Send a gated Voice Persona runtime message
+      description: Uses Memories RAG sources, safety block fallback, TTS playback when configured, and per-session usage accounting.
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersonaRuntimeMessageRequest'
+      responses:
+        '201':
+          description: Runtime message response
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/analysis/jobs/{jobId}/retry:
+    post:
+      tags: [Analysis]
+      summary: Retry a retryable paid analysis job
+      description: Requeues only owned jobs in failed_retryable state. Completed, failed_terminal, cancelled, queued, and active jobs are rejected; no duplicate active job is created.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      responses:
+        '200':
+          description: Analysis job requeued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/memories/analysis-jobs:
+    get:
+      tags: [Analysis]
+      summary: List my Memories analysis jobs
+      description: Returns only the authenticated user's paid Memories analysis jobs with failure code, retry counters, timestamps, and derived progress.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobStatusFilter'
+        - $ref: '#/components/parameters/AnalysisJobRecordingIdFilter'
+        - $ref: '#/components/parameters/AnalysisJobSubjectIdFilter'
+        - $ref: '#/components/parameters/AnalysisJobLimitFilter'
+      responses:
+        '200':
+          description: Owner analysis jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/admin/analysis-jobs:
+    get:
+      tags: [Admin, Analysis]
+      summary: List all analysis jobs
+      description: ADMIN and OPS users can list analysis jobs across owners with the same failure code and progress fields exposed to owners.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobStatusFilter'
+        - $ref: '#/components/parameters/AnalysisJobRecordingIdFilter'
+        - $ref: '#/components/parameters/AnalysisJobSubjectIdFilter'
+        - $ref: '#/components/parameters/AnalysisJobLimitFilter'
+      responses:
+        '200':
+          description: All analysis jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/analysis-jobs/{jobId}/retry:
+    post:
+      tags: [Admin, Analysis]
+      summary: Admin retry for a retryable analysis job
+      description: ADMIN and OPS users can requeue a failed_retryable job. The existing job row is requeued, duplicate active jobs are not created, and an analysis_job_retry audit log is written.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      responses:
+        '200':
+          description: Analysis job requeued by admin or ops
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/preprocess:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark paid analysis preprocessing
+      description: Admin worker transition endpoint. Moves queued/leased work into preprocessing, records the worker id when supplied, and sets a lease expiry used by stale-lease cleanup.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerTransitionRequest'
+      responses:
+        '200':
+          description: Analysis job marked preprocessing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/stt:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark STT processing and persist transcript segments
+      description: Admin worker transition endpoint. Accepts worker-supplied transcript segments and idempotently upserts them by jobId and segmentIndex.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkSttRequest'
+      responses:
+        '200':
+          description: Analysis job marked STT processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/redaction:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark paid analysis redaction gate
+      description: Admin worker transition endpoint. Marks the job at the redaction gate without running masking providers.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      responses:
+        '200':
+          description: Analysis job marked redaction pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/segmenting:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark segmenting and persist memory segments
+      description: Admin worker transition endpoint. Accepts worker-supplied memory segments and idempotently upserts them by jobId and segmentIndex.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkSegmentingRequest'
+      responses:
+        '200':
+          description: Analysis job marked segmenting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/indexing:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark indexing and persist embeddings
+      description: Admin worker transition endpoint. Accepts worker-supplied embeddings and idempotently upserts them by jobId and embeddingIndex.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkIndexingRequest'
+      responses:
+        '200':
+          description: Analysis job marked indexing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/completed:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark paid analysis completed
+      description: Admin worker transition endpoint. Marks the paid analysis job completed and updates recording analysis progress.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      responses:
+        '200':
+          description: Analysis job marked completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/transitions/failed:
+    patch:
+      tags: [Admin, Analysis]
+      summary: Mark paid analysis failed
+      description: Admin worker transition endpoint. Marks the job retryable or terminal according to its retry budget.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkFailedRequest'
+      responses:
+        '200':
+          description: Analysis job marked failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
   /api/v1/conversations:
     post:
       tags: [Conversations]
@@ -546,12 +1519,75 @@ paths:
       responses:
         '200':
           description: Error logs
+  /api/v1/admin/operations/search:
+    get:
+      tags: [Admin]
+      summary: Search sanitized v1 operations resources
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+            maxLength: 120
+        - in: query
+          name: status
+          schema:
+            type: string
+            maxLength: 80
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Sanitized operations search rows
+  /api/v1/admin/operations/dashboard:
+    get:
+      tags: [Admin]
+      summary: Get v1 operations aggregate counts
+      responses:
+        '200':
+          description: Operations dashboard counts
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or token is missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Authenticated user lacks the required role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Request conflicts with current resource state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   parameters:
     ConversationId:
       in: path
@@ -583,7 +1619,88 @@ components:
       required: true
       schema:
         type: string
+    RecordingId:
+      in: path
+      name: recordingId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UploadIntentId:
+      in: path
+      name: uploadIntentId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AnalysisJobId:
+      in: path
+      name: jobId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VoicePersonaApplicationId:
+      in: path
+      name: applicationId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AnalysisJobStatusFilter:
+      in: query
+      name: status
+      required: false
+      schema:
+        type: string
+        enum: [queued, leased, preprocessing, stt_processing, redaction_pending, segmenting, embedding, indexing, completed, failed_retryable, failed_terminal, blocked_consent_withdrawn, cancelled]
+    AnalysisJobRecordingIdFilter:
+      in: query
+      name: recordingId
+      required: false
+      schema:
+        type: string
+        format: uuid
+    AnalysisJobSubjectIdFilter:
+      in: query
+      name: subjectId
+      required: false
+      schema:
+        type: string
+        format: uuid
+    AnalysisJobLimitFilter:
+      in: query
+      name: limit
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: CONFLICT
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
     LoginRequest:
       type: object
       required: [identifier, password]
@@ -696,6 +1813,1005 @@ components:
                 $ref: '#/components/schemas/ConsentType'
               version:
                 type: string
+    CreateOrderRequest:
+      type: object
+      required: [productId]
+      properties:
+        productId:
+          type: string
+          enum: [memories_access, voice_persona_build]
+        targetRecordingId:
+          type: string
+          format: uuid
+          description: Required for memories_access orders.
+    CreateOrderResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            order:
+              $ref: '#/components/schemas/Order'
+            checkout:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [local]
+                checkoutId:
+                  type: string
+                paymentUrl:
+                  type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+        paymentStatus:
+          type: string
+          enum: [pending, paid, failed, canceled]
+        targetRecordingId:
+          type: string
+          format: uuid
+          nullable: true
+    PaymentWebhookResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            processed:
+              type: boolean
+            eventId:
+              type: string
+              format: uuid
+            entitlementId:
+              type: string
+              format: uuid
+            analysisJobId:
+              type: string
+              format: uuid
+    EntitlementsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+    Entitlement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+        orderId:
+          type: string
+          format: uuid
+        feature:
+          type: string
+          enum: [memories, voice_persona]
+        status:
+          type: string
+          enum: [active, revoked]
+    MemoriesStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/MemoriesStatus'
+    MemoriesStatus:
+      type: object
+      properties:
+        entitled:
+          type: boolean
+        searchable:
+          type: boolean
+        indexedSegmentCount:
+          type: integer
+          minimum: 0
+        completedJobCount:
+          type: integer
+          minimum: 0
+        latestCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+    MemoriesSearchRequest:
+      type: object
+      required: [q]
+      properties:
+        q:
+          type: string
+          minLength: 1
+          maxLength: 500
+        subjectId:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+    MemoriesSearchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/MemoriesSearchResult'
+    MemoriesSearchResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [answered, no_results]
+        answer:
+          type: string
+        resultCount:
+          type: integer
+          minimum: 0
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemorySearchSegment'
+        lowConfidence:
+          type: boolean
+    MemorySearchSegment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        startMs:
+          type: integer
+          minimum: 0
+        endMs:
+          type: integer
+          minimum: 0
+        speakerLabel:
+          type: string
+          nullable: true
+        text:
+          type: string
+        score:
+          type: number
+        lowConfidence:
+          type: boolean
+    MemorySegmentPlaybackRequest:
+      type: object
+      properties:
+        bufferMs:
+          type: integer
+          minimum: 0
+          maximum: 30000
+          default: 3000
+    MemorySegmentPlaybackResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/MemorySegmentPlayback'
+    MemorySegmentPlayback:
+      type: object
+      properties:
+        playbackUrl:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        ttlSeconds:
+          type: integer
+        downloadAllowed:
+          type: boolean
+          enum: [false]
+        segmentStartMs:
+          type: integer
+          minimum: 0
+        segmentEndMs:
+          type: integer
+          minimum: 0
+        bufferMs:
+          type: integer
+          minimum: 0
+    MemorySegmentFeedbackRequest:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: string
+          enum: [UP, NEUTRAL, DOWN]
+        tags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+        comment:
+          type: string
+          maxLength: 500
+        reportedStartMs:
+          type: integer
+          minimum: 0
+        reportedEndMs:
+          type: integer
+          minimum: 0
+    MemorySegmentFeedbackResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/MemorySegmentFeedback'
+    MemorySegmentFeedback:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        memorySegmentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        rating:
+          type: string
+          enum: [UP, NEUTRAL, DOWN]
+        tags:
+          type: array
+          items:
+            type: string
+        comment:
+          type: string
+          nullable: true
+        reportedStartMs:
+          type: integer
+          nullable: true
+        reportedEndMs:
+          type: integer
+          nullable: true
+    NotificationsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+    NotificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/Notification'
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [analysis_completed, analysis_failed, persona_document_status, persona_review_status, persona_build_status]
+        title:
+          type: string
+        body:
+          type: string
+        resourceType:
+          type: string
+          nullable: true
+        resourceId:
+          type: string
+          format: uuid
+          nullable: true
+        subjectId:
+          type: string
+          format: uuid
+          nullable: true
+        recordingId:
+          type: string
+          format: uuid
+          nullable: true
+        payload:
+          type: object
+          additionalProperties: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    ResearchExportPreferenceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/ResearchExportPreference'
+    ResearchExportPreference:
+      type: object
+      properties:
+        optedIn:
+          type: boolean
+        optedInAt:
+          type: string
+          format: date-time
+          nullable: true
+        withdrawnAt:
+          type: string
+          format: date-time
+          nullable: true
+    ResearchExportPreviewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: '#/components/schemas/ResearchExportPreviewRow'
+    ResearchExportPreviewRow:
+      type: object
+      properties:
+        memorySegmentId:
+          type: string
+          format: uuid
+        ownerUserId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        startMs:
+          type: integer
+          minimum: 0
+        endMs:
+          type: integer
+          minimum: 0
+        eligible:
+          type: boolean
+        redactedText:
+          type: string
+          nullable: true
+        exclusionReason:
+          type: string
+          nullable: true
+    CreateDataDeletionRequest:
+      type: object
+      required: [scope, confirmation]
+      properties:
+        scope:
+          type: string
+          enum: [account, subject, recording]
+        confirmation:
+          type: string
+          example: DELETE MY DATA
+        subjectId:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 500
+    UpdateDataDeletionRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [requested, in_review, processing, completed, rejected]
+    UpdateProviderDeletionRecord:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending_manual, requested, completed, failed]
+        notes:
+          type: string
+          maxLength: 500
+    CreateVoicePersonaApplicationRequest:
+      type: object
+      required: [subjectId]
+      properties:
+        subjectId:
+          type: string
+          format: uuid
+    VoicePersonaApplicationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/VoicePersonaApplication'
+    VoicePersonaApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerUserId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        entitlementId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [draft, locked_until_requirements, ready_for_admin_review, build_pending, ready]
+        documentsStatus:
+          type: string
+          enum: [pending_review, approved, rejected]
+        intakeStatus:
+          type: string
+          enum: [draft, submitted]
+        voiceSampleStatus:
+          type: string
+          enum: [pending_review, approved, rejected]
+        buildStatus:
+          type: string
+          enum: [locked_until_requirements, pending_admin_review, pending_manual_provider_asset, ready, failed]
+    CreateVoicePersonaDocumentIntentRequest:
+      type: object
+      required: [filename, mimeType, fileSizeBytes]
+      properties:
+        filename:
+          type: string
+          maxLength: 255
+        mimeType:
+          type: string
+          maxLength: 120
+        fileSizeBytes:
+          type: string
+    VoicePersonaDocumentIntentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            document:
+              type: object
+            uploadUrl:
+              type: string
+            method:
+              type: string
+              enum: [PUT]
+    UpsertPersonaIntakeRequest:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sectionKey, answers]
+            properties:
+              sectionKey:
+                type: string
+                maxLength: 80
+              answers:
+                type: object
+                additionalProperties: true
+    CreateTargetVoiceSampleRequest:
+      type: object
+      properties:
+        recordingId:
+          type: string
+          format: uuid
+        storageKey:
+          type: string
+          maxLength: 500
+    PersonaBuildStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            applicationId:
+              type: string
+              format: uuid
+            buildStatus:
+              type: string
+            documentsStatus:
+              type: string
+            intakeStatus:
+              type: string
+            voiceSampleStatus:
+              type: string
+            lockedReasons:
+              type: array
+              items:
+                type: string
+    RequestPersonaBibleChangesRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          maxLength: 1000
+    ReviewVoicePersonaAssetRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending_review, approved, rejected]
+        notes:
+          type: string
+          maxLength: 500
+    UpdatePersonaBuildStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [locked_until_requirements, pending_admin_review, pending_manual_provider_asset, ready, failed]
+    UpsertPersonaBibleRequest:
+      type: object
+      required: [contentSummary]
+      properties:
+        contentSummary:
+          type: string
+          maxLength: 10000
+        safetyNotes:
+          type: string
+          maxLength: 2000
+    RegisterVoiceProviderAssetRequest:
+      type: object
+      required: [providerName, externalAssetId]
+      properties:
+        providerName:
+          type: string
+          maxLength: 120
+        externalAssetId:
+          type: string
+          maxLength: 160
+        status:
+          type: string
+          enum: [pending_manual_registration, registered, failed, deletion_requested, deleted]
+        notes:
+          type: string
+          maxLength: 1000
+    CreatePersonaRuntimeSessionRequest:
+      type: object
+      required: [applicationId]
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+    CreatePersonaRuntimeMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+    WorkerTransitionRequest:
+      type: object
+      properties:
+        workerId:
+          type: string
+          maxLength: 120
+          example: worker-1
+    TranscriptSegmentInput:
+      type: object
+      required: [segmentIndex, startMs, endMs, transcriptText]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+        startMs:
+          type: integer
+          minimum: 0
+        endMs:
+          type: integer
+          minimum: 0
+        speakerLabel:
+          type: string
+          maxLength: 120
+          example: speaker_1
+        transcriptText:
+          type: string
+          maxLength: 20000
+    MarkSttRequest:
+      type: object
+      required: [segments]
+      properties:
+        segments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TranscriptSegmentInput'
+    MemorySegmentInput:
+      type: object
+      required: [segmentIndex, sourceTranscriptSegmentIds, startMs, endMs, memoryText]
+      properties:
+        segmentIndex:
+          type: integer
+          minimum: 0
+        sourceTranscriptSegmentIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        startMs:
+          type: integer
+          minimum: 0
+        endMs:
+          type: integer
+          minimum: 0
+        speakerLabel:
+          type: string
+          maxLength: 120
+          example: unknown
+        memoryText:
+          type: string
+          maxLength: 20000
+    MarkSegmentingRequest:
+      type: object
+      required: [segments]
+      properties:
+        segments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/MemorySegmentInput'
+    EmbeddingInput:
+      type: object
+      required: [memorySegmentId, embeddingIndex, provider, model, dimensions, embedding]
+      properties:
+        memorySegmentId:
+          type: string
+          format: uuid
+        embeddingIndex:
+          type: integer
+          minimum: 0
+        provider:
+          type: string
+          maxLength: 80
+          example: synthetic
+        model:
+          type: string
+          maxLength: 120
+          example: unit-test
+        dimensions:
+          type: integer
+          minimum: 1
+        embedding:
+          type: array
+          minItems: 1
+          items:
+            type: number
+    MarkIndexingRequest:
+      type: object
+      required: [embeddings]
+      properties:
+        embeddings:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/EmbeddingInput'
+    MarkFailedRequest:
+      type: object
+      required: [failureCode]
+      properties:
+        failureCode:
+          type: string
+          maxLength: 80
+          example: worker_timeout
+        failureMessage:
+          type: string
+          maxLength: 500
+          nullable: true
+    AnalysisJobResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/AnalysisJob'
+    AnalysisJobListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisJob'
+    AnalysisJobProgress:
+      type: object
+      properties:
+        stage:
+          type: string
+          enum: [queued, leased, preprocessing, stt_processing, redaction_pending, segmenting, embedding, indexing, completed, failed_retryable, failed_terminal, blocked_consent_withdrawn, cancelled]
+        percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        terminal:
+          type: boolean
+    AnalysisJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerUserId:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        entitlementId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, leased, preprocessing, stt_processing, redaction_pending, segmenting, embedding, indexing, completed, failed_retryable, failed_terminal, blocked_consent_withdrawn, cancelled]
+        progress:
+          $ref: '#/components/schemas/AnalysisJobProgress'
+        retryCount:
+          type: integer
+        maxRetries:
+          type: integer
+        failureCode:
+          type: string
+          nullable: true
+        failureMessage:
+          type: string
+          nullable: true
+        statusChangedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        failedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    RecordingUploadGuideResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/RecordingUploadGuide'
+    RecordingUploadGuide:
+      type: object
+      properties:
+        supported_mime_types:
+          type: array
+          items:
+            type: string
+            enum: [audio/aac, audio/amr, audio/m4a, audio/mp4, audio/mpeg, audio/wav, audio/x-m4a, audio/x-wav]
+        max_file_size_bytes:
+          type: integer
+          example: 536870912
+        single_file_only:
+          type: boolean
+          example: true
+        sources:
+          type: array
+          items:
+            type: string
+            enum: [app_recording, share_extension, manual_upload]
+        platforms:
+          type: array
+          items:
+            type: string
+            enum: [ios, android, web]
+        lifecycle:
+          type: array
+          items:
+            type: string
+            enum: [uploading, completed, failed, canceled, expired]
+        failure_codes:
+          type: array
+          items:
+            type: string
+            enum: [unsupported_mime_type, file_too_large, multi_file_not_supported, upload_expired, object_missing, size_mismatch, checksum_mismatch, upload_canceled, retry_not_allowed, already_completed]
+        checksum_statuses:
+          type: array
+          items:
+            type: string
+            enum: [verified, mismatch, not_supported]
+    RecordingUploadIntentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/RecordingUploadIntent'
+    RecordingUploadIntent:
+      type: object
+      properties:
+        recording:
+          $ref: '#/components/schemas/Recording'
+        method:
+          type: string
+          example: PUT
+        uploadUrl:
+          type: string
+          format: uri
+        storageKey:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        uploadIntentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [uploading, completed, failed, canceled, expired]
+        source:
+          type: string
+          enum: [app_recording, share_extension, manual_upload]
+        platform:
+          type: string
+          enum: [ios, android, web]
+        singleFile:
+          type: boolean
+        failureCode:
+          type: string
+          nullable: true
+          enum: [unsupported_mime_type, file_too_large, multi_file_not_supported, upload_expired, object_missing, size_mismatch, checksum_mismatch, upload_canceled, retry_not_allowed, already_completed]
+    RecordingUploadIntentStateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/RecordingUploadIntentState'
+        meta:
+          type: object
+    RecordingUploadIntentState:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        recordingId:
+          type: string
+          format: uuid
+        subjectId:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum: [app_recording, share_extension, manual_upload]
+        platform:
+          type: string
+          enum: [ios, android, web]
+        singleFile:
+          type: boolean
+        status:
+          type: string
+          enum: [uploading, completed, failed, canceled, expired]
+        failureCode:
+          type: string
+          nullable: true
+          enum: [unsupported_mime_type, file_too_large, multi_file_not_supported, upload_expired, object_missing, size_mismatch, checksum_mismatch, upload_canceled, retry_not_allowed, already_completed]
+        originalFilename:
+          type: string
+        mimeType:
+          type: string
+        expectedFileSizeBytes:
+          type: string
+        storageKey:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        canceledAt:
+          type: string
+          format: date-time
+          nullable: true
+    Recording:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        original_filename:
+          type: string
+        mime_type:
+          type: string
+        file_size_bytes:
+          type: string
+        duration_seconds:
+          type: integer
+          nullable: true
+        upload_status:
+          type: string
+          enum: [CREATED, UPLOADING, UPLOADED, UPLOAD_FAILED]
+        analysis_status:
+          type: string
+          enum: [NOT_REQUESTED, PROCESSING, COMPLETED, FAILED]
+        archive_status:
+          type: string
+          enum: [pending_upload, active, archived, deletion_requested, deleted]
+        analysis_stage:
+          type: string
+          example: not_analyzed
+        memories_status:
+          type: string
+          example: locked_until_memories
+        checksum_status:
+          type: string
+          enum: [verified, mismatch, not_supported]
+        summary:
+          nullable: true
+        summary_status:
+          type: string
+          example: locked_until_memories
     PersonaResponse:
       type: object
       properties:
