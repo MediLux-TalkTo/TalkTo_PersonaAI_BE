@@ -196,6 +196,39 @@ describe('AiClientService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('allows explicit legacy chat bypass without checking purpose consent', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        content: '기존 채팅 답변',
+        retrieved_memory_ids: [],
+      }),
+    } as unknown as Response);
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    await expect(
+      service.chat(
+        { message: '엄마 사랑해', history: [], memories: [] },
+        {
+          ownerUserId: 'anonymous-session-id',
+          feature: ConsentFeature.MEMORIES,
+          bypassConsentCheck: true,
+        },
+      ),
+    ).resolves.toMatchObject({ content: '기존 채팅 답변' });
+
+    expect(consentsService.assertRequiredConsents).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/ai/chat',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
   it('blocks embedding provider calls when required redaction fails', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     global.fetch = jest.fn().mockResolvedValue({

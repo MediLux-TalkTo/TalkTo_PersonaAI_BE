@@ -54,6 +54,7 @@ export interface AiProviderConsentContext {
   readonly ownerUserId: string;
   readonly subjectId?: string;
   readonly feature?: ConsentFeature;
+  readonly bypassConsentCheck?: boolean;
 }
 
 type RequiredConsentAsserter = Pick<ConsentsService, 'assertRequiredConsents'>;
@@ -204,6 +205,10 @@ export class AiClientService {
     fallbackFeature: ConsentFeature,
   ): Promise<void> {
     const feature = consentContext?.feature ?? fallbackFeature;
+
+    if (consentContext?.bypassConsentCheck) {
+      return;
+    }
 
     if (!consentContext || !this.consentsService) {
       throw new ForbiddenException({

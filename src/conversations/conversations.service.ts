@@ -548,6 +548,7 @@ export class ConversationsService {
     return {
       ownerUserId,
       feature,
+      bypassConsentCheck: true,
     };
   }
 

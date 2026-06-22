@@ -18,10 +18,12 @@ describe('ConversationsService AI consent context', () => {
   const memoriesConsentContext = {
     ownerUserId,
     feature: ConsentFeature.MEMORIES,
+    bypassConsentCheck: true,
   };
   const voicePersonaConsentContext = {
     ownerUserId,
     feature: ConsentFeature.VOICE_PERSONA,
+    bypassConsentCheck: true,
   };
 
   const createService = () => {
