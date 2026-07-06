@@ -18,6 +18,9 @@ import {
   RecordingUploadIntentStatus,
 } from './upload-intent.constants';
 
+const UPLOAD_EXPIRES_AT = new Date('2099-07-05T00:00:00.000Z');
+const PLAYBACK_EXPIRES_AT = new Date('2099-07-05T01:00:00.000Z');
+
 describe('RecordingsService', () => {
   const repository = () => ({
     create: jest.fn((value) => value),
@@ -53,12 +56,12 @@ describe('RecordingsService', () => {
       createUploadIntent: jest.fn().mockResolvedValue({
         storageKey: 'recordings/user-id/subject-id/recording-id.m4a',
         uploadUrl: 'https://upload.example',
-        expiresAt: new Date('2026-07-05T00:00:00.000Z'),
+        expiresAt: UPLOAD_EXPIRES_AT,
         method: 'PUT',
       }),
       createPlaybackUrl: jest.fn().mockResolvedValue({
         playbackUrl: 'https://playback.example',
-        expiresAt: new Date('2026-07-05T01:00:00.000Z'),
+        expiresAt: PLAYBACK_EXPIRES_AT,
         ttlSeconds: 3600,
       }),
       verifyUploadObject: jest.fn().mockResolvedValue({
@@ -134,7 +137,7 @@ describe('RecordingsService', () => {
         hasMemo: false,
         hasRelatedQuestionId: false,
         uploadMethod: 'PUT',
-        expiresAt: new Date('2026-07-05T00:00:00.000Z'),
+        expiresAt: UPLOAD_EXPIRES_AT,
       },
     });
     expect(JSON.stringify(appEventsService.emit.mock.calls[0][0])).not.toContain(
@@ -220,7 +223,7 @@ describe('RecordingsService', () => {
       ownerUserId: 'user-id',
       status: RecordingUploadIntentStatus.UPLOADING,
       storageKey: 'recordings/user-id/subject-id/recording-id.m4a',
-      expiresAt: new Date('2026-07-05T01:00:00.000Z'),
+      expiresAt: PLAYBACK_EXPIRES_AT,
     });
 
     await expect(
@@ -285,7 +288,7 @@ describe('RecordingsService', () => {
       ownerUserId: 'user-id',
       status: RecordingUploadIntentStatus.UPLOADING,
       storageKey: 'recordings/user-id/subject-id/recording-id.m4a',
-      expiresAt: new Date('2026-07-05T01:00:00.000Z'),
+      expiresAt: PLAYBACK_EXPIRES_AT,
     });
     audioStorageService.verifyUploadObject.mockResolvedValue({
       exists: true,
@@ -509,7 +512,7 @@ describe('RecordingsService', () => {
 
     await expect(service.createPlaybackUrl('recording-id', 'user-id')).resolves.toEqual({
       playback_url: 'https://playback.example',
-      expires_at: new Date('2026-07-05T01:00:00.000Z'),
+      expires_at: PLAYBACK_EXPIRES_AT,
       ttl_seconds: 3600,
       download_allowed: false,
     });
