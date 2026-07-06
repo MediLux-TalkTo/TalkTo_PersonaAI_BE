@@ -55,7 +55,10 @@ export class ProviderCallGatewayService {
   prepareJsonPayload(
     input: ProviderCallGatewayInput,
   ): ProviderCallGatewayResult {
-    const forbiddenDataClasses = findForbiddenProviderData(input.payload);
+    const forbiddenDataClasses = findForbiddenProviderData(
+      input.payload,
+      input.operation,
+    );
     if (forbiddenDataClasses.length > 0) {
       throw new ProviderCallBlockedException({
         code: 'provider_payload_forbidden',
@@ -127,15 +130,26 @@ function countSpans(
   return counts;
 }
 
-function findForbiddenProviderData(payload: unknown): readonly string[] {
+function findForbiddenProviderData(
+  payload: unknown,
+  operation: ProviderCallOperation,
+): readonly string[] {
   const matches: string[] = [];
-  collectForbiddenProviderData(payload, matches);
+  collectForbiddenProviderData(payload, matches, operation);
   return matches;
 }
 
-function collectForbiddenProviderData(payload: unknown, matches: string[]): void {
+function collectForbiddenProviderData(
+  payload: unknown,
+  matches: string[],
+  operation: ProviderCallOperation,
+  parentKey?: string,
+): void {
   if (typeof payload === 'string') {
-    if (FORBIDDEN_PROVIDER_VALUE_PATTERN.test(payload)) {
+    if (
+      !isAllowedSttAudioUrl(operation, parentKey) &&
+      FORBIDDEN_PROVIDER_VALUE_PATTERN.test(payload)
+    ) {
       matches.push('presigned_or_raw_audio_url');
     }
     return;
@@ -143,7 +157,7 @@ function collectForbiddenProviderData(payload: unknown, matches: string[]): void
 
   if (Array.isArray(payload)) {
     for (const item of payload) {
-      collectForbiddenProviderData(item, matches);
+      collectForbiddenProviderData(item, matches, operation, parentKey);
     }
     return;
   }
@@ -157,8 +171,15 @@ function collectForbiddenProviderData(payload: unknown, matches: string[]): void
       matches.push(providerDataClassForKey(key));
       continue;
     }
-    collectForbiddenProviderData(value, matches);
+    collectForbiddenProviderData(value, matches, operation, key);
   }
+}
+
+function isAllowedSttAudioUrl(
+  operation: ProviderCallOperation,
+  key?: string,
+): boolean {
+  return operation === 'stt' && key === 'audioUrl';
 }
 
 function providerDataClassForKey(key: string): string {

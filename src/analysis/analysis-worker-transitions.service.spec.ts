@@ -76,6 +76,7 @@ describe('AnalysisWorkerTransitionsService', () => {
             startMs: 0,
             endMs: 2500,
             transcriptText: 'Synthetic redacted hello.',
+            confidence: 0.91,
           },
         ],
       }),
@@ -90,6 +91,7 @@ describe('AnalysisWorkerTransitionsService', () => {
         segmentIndex: 0,
         speakerLabel: 'unknown',
         transcriptText: 'Synthetic redacted hello.',
+        confidence: 0.91,
       }),
     ], expect.objectContaining({ conflictPaths: ['jobId', 'segmentIndex'] }));
     expect(recordingsRepository.save).toHaveBeenLastCalledWith(
