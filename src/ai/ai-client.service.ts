@@ -10,6 +10,11 @@ import {
   ProviderCallGatewayService,
   type ProviderCallOperation,
 } from './provider-call-gateway.service';
+import type {
+  AiAnalysisTranscriptionRequest,
+  AiAnalysisTranscriptionResponse,
+} from './ai-analysis-transcription.types';
+import { AiServerHttpError } from './ai-server-http.error';
 
 export interface AiChatMemory {
   id: string;
@@ -141,6 +146,27 @@ export class AiClientService {
       '/ai/memory/extract',
       this.prepareProviderPayload('memory_extract', request, true),
     );
+  }
+
+  async requestAnalysisTranscription(
+    request: AiAnalysisTranscriptionRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiAnalysisTranscriptionResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
+
+    const response = await this.postJson<AiAnalysisTranscriptionResponse>(
+      '/v1/analysis/transcriptions',
+      this.prepareProviderPayload('stt', request, false),
+    );
+
+    if (!Array.isArray(response.segments)) {
+      throw new Error('AI transcription response is missing segments.');
+    }
+
+    return response;
   }
 
   async transcribe(
@@ -280,7 +306,7 @@ export class AiClientService {
       });
 
       if (!response.ok) {
-        throw new Error(`AI server returned ${response.status}.`);
+        throw await AiServerHttpError.fromResponse(response);
       }
 
       return response;

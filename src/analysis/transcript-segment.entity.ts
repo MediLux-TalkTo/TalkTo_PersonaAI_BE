@@ -50,6 +50,9 @@ export class TranscriptSegment {
   @Column({ type: 'text' })
   transcriptText: string;
 
+  @Column({ type: 'double precision', nullable: true })
+  confidence: number | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

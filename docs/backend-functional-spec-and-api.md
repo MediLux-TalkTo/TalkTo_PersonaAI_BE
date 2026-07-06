@@ -398,6 +398,7 @@ Not yet implemented:
 | Analysis | POST | `/api/v1/admin/analysis-jobs/{jobId}/retry` | Requeue a retryable analysis job and write an audit log | Admin/Ops |
 | Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/preprocess` | Mark paid analysis preprocessing and lease worker progress | Admin |
 | Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/stt` | Mark STT processing and upsert transcript segments | Admin |
+| Analysis | POST | `/api/v1/admin/analysis/jobs/{jobId}/provider/transcription` | Request TalkTo_APP_AI transcription with a 30-minute-minimum signed recording URL and persist returned transcript segments | Admin |
 | Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/redaction` | Mark redaction gate pending | Admin |
 | Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/segmenting` | Mark segmenting and upsert memory segments | Admin |
 | Analysis | PATCH | `/api/v1/admin/analysis/jobs/{jobId}/transitions/indexing` | Mark indexing and upsert embeddings | Admin |

@@ -1113,6 +1113,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalysisJobResponse'
+  /api/v1/admin/analysis/jobs/{jobId}/provider/transcription:
+    post:
+      tags: [Admin, Analysis]
+      summary: Request TalkTo_APP_AI transcription and persist transcript segments
+      description: Issues a recording playback URL with at least a 30-minute TTL, sends it to TalkTo_APP_AI with subject/glossary/intake context, retries once for expired or failed audio downloads, and upserts returned transcript segments including confidence.
+      parameters:
+        - $ref: '#/components/parameters/AnalysisJobId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestAiTranscriptionRequest'
+      responses:
+        '200':
+          description: AI transcription persisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJobResponse'
   /api/v1/admin/analysis/jobs/{jobId}/transitions/redaction:
     patch:
       tags: [Admin, Analysis]
@@ -2453,6 +2473,12 @@ components:
         transcriptText:
           type: string
           maxLength: 20000
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          nullable: true
     MarkSttRequest:
       type: object
       required: [segments]
@@ -2462,6 +2488,13 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/TranscriptSegmentInput'
+    RequestAiTranscriptionRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [full, preview]
+          default: full
     MemorySegmentInput:
       type: object
       required: [segmentIndex, sourceTranscriptSegmentIds, startMs, endMs, memoryText]

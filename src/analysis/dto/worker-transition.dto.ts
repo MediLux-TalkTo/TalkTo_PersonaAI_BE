@@ -3,15 +3,19 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+const transcriptionModeValues = ['full', 'preview'] as const;
 
 export class WorkerTransitionDto {
   @ApiPropertyOptional({ example: 'worker-1', maxLength: 120 })
@@ -47,6 +51,13 @@ export class TranscriptSegmentInputDto {
   @IsString()
   @MaxLength(20000)
   transcriptText: string;
+
+  @ApiPropertyOptional({ example: 0.92, minimum: 0, maximum: 1 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  confidence?: number;
 }
 
 export class MarkSttDto {
@@ -56,6 +67,13 @@ export class MarkSttDto {
   @ValidateNested({ each: true })
   @Type(() => TranscriptSegmentInputDto)
   segments: TranscriptSegmentInputDto[];
+}
+
+export class RequestAiTranscriptionDto {
+  @ApiPropertyOptional({ enum: transcriptionModeValues, default: 'full' })
+  @IsOptional()
+  @IsIn(transcriptionModeValues)
+  mode?: (typeof transcriptionModeValues)[number];
 }
 
 export class MemorySegmentInputDto {

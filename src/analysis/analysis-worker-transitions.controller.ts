@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -11,6 +11,7 @@ import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { success } from '../common/utils/api-response';
+import { AnalysisAiTranscriptionService } from './analysis-ai-transcription.service';
 import { AnalysisWorkerTransitionsService } from './analysis-worker-transitions.service';
 import { AnalysisJobResponseDto } from './dto/analysis-job-response.dto';
 import {
@@ -18,6 +19,7 @@ import {
   MarkIndexingDto,
   MarkSegmentingDto,
   MarkSttDto,
+  RequestAiTranscriptionDto,
   WorkerTransitionDto,
 } from './dto/worker-transition.dto';
 
@@ -29,6 +31,7 @@ import {
 export class AnalysisWorkerTransitionsController {
   constructor(
     private readonly workerTransitionsService: AnalysisWorkerTransitionsService,
+    private readonly aiTranscriptionService: AnalysisAiTranscriptionService,
   ) {}
 
   @Patch(':jobId/transitions/preprocess')
@@ -54,6 +57,26 @@ export class AnalysisWorkerTransitionsController {
     return success(
       this.workerTransitionsService.toDto(
         await this.workerTransitionsService.markStt(jobId, dto),
+      ),
+    );
+  }
+
+  @Post(':jobId/provider/transcription')
+  @ApiOperation({
+    summary: 'Request AI transcription and persist returned transcript segments',
+  })
+  @ApiBody({ type: RequestAiTranscriptionDto })
+  @ApiOkResponse({ type: AnalysisJobResponseDto })
+  async requestProviderTranscription(
+    @Param('jobId') jobId: string,
+    @Body() dto: RequestAiTranscriptionDto,
+  ) {
+    return success(
+      this.workerTransitionsService.toDto(
+        await this.aiTranscriptionService.requestAndPersistTranscription(
+          jobId,
+          dto.mode ?? 'full',
+        ),
       ),
     );
   }

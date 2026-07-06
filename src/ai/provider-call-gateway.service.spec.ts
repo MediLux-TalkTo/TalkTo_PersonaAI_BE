@@ -61,4 +61,29 @@ describe('ProviderCallGatewayService', () => {
       }),
     ).toThrow(ProviderCallBlockedException);
   });
+
+  it('allows the dedicated STT audioUrl field while keeping other signed URL fields blocked', () => {
+    const gateway = new ProviderCallGatewayService(new DeterministicRedactor());
+
+    expect(() =>
+      gateway.prepareJsonPayload({
+        operation: 'stt',
+        redactionRequired: false,
+        payload: {
+          recordingId: 'recording-id',
+          audioUrl: 'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      gateway.prepareJsonPayload({
+        operation: 'stt',
+        redactionRequired: false,
+        payload: {
+          playbackUrl:
+            'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+        },
+      }),
+    ).toThrow(ProviderCallBlockedException);
+  });
 });

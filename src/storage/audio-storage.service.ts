@@ -100,10 +100,14 @@ export class AudioStorageService {
     };
   }
 
-  async createPlaybackUrl(storageKey: string): Promise<PlaybackIntent> {
+  async createPlaybackUrl(
+    storageKey: string,
+    minimumTtlSeconds = 0,
+  ): Promise<PlaybackIntent> {
     const driver = this.configService.get<string>('AUDIO_STORAGE_DRIVER') ?? 'local';
-    const ttlSeconds =
+    const configuredTtlSeconds =
       this.configService.get<number>('AUDIO_SIGNED_URL_TTL_SECONDS') ?? 3600;
+    const ttlSeconds = Math.max(configuredTtlSeconds, minimumTtlSeconds);
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
     if (driver === 'r2') {

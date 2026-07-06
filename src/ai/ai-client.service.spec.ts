@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { ForbiddenException } from '@nestjs/common';
 import { ConsentFeature, ConsentType } from '../common/enums/consent.enums';
 import { AiClientService } from './ai-client.service';
+import { AiServerHttpError } from './ai-server-http.error';
 
 describe('AiClientService', () => {
   const originalFetch = global.fetch;
@@ -172,6 +173,142 @@ describe('AiClientService', () => {
       }),
     );
     expect(result?.memory_type).toBe('SHORT_TERM');
+  });
+
+  it('posts analysis transcription JSON with the presigned audio URL and context', async () => {
+    consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        provider: 'talkto-app-ai',
+        model: 'stt-v1',
+        segments: [
+          {
+            segmentIndex: 0,
+            startMs: 0,
+            endMs: 1200,
+            transcriptText: '정읍 이야기',
+            confidence: 0.93,
+          },
+        ],
+      }),
+    } as unknown as Response);
+    global.fetch = fetchMock;
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) => {
+        if (key === 'AI_SERVER_URL') {
+          return 'http://localhost:8000';
+        }
+        if (key === 'AI_SERVER_TOKEN') {
+          return 'shared-secret';
+        }
+        return undefined;
+      }),
+    } as unknown as ConfigService, consentsService);
+
+    const result = await service.requestAnalysisTranscription(
+      {
+        jobId: 'job-id',
+        recordingId: 'recording-id',
+        audioUrl: 'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+        audioMimeType: 'audio/m4a',
+        mode: 'full',
+        language: 'ko',
+        speakerDiarization: true,
+        glossary: ['정읍'],
+        subjectContext: {
+          subject: { addressTerm: '외할머니', name: '신금자' },
+          familyMembers: [],
+          glossaryTerms: ['정읍'],
+        },
+        intakeContext: null,
+      },
+      {
+        ownerUserId: 'user-id',
+        subjectId: 'subject-id',
+      },
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/analysis/transcriptions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'content-type': 'application/json',
+          'x-ai-server-token': 'shared-secret',
+        }),
+      }),
+    );
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
+      '"audioUrl":"https://bucket.example/recording.m4a?X-Amz-Signature=secret"',
+    );
+    expect(result?.segments[0]?.confidence).toBe(0.93);
+  });
+
+  it('preserves AI 422 reason codes for transcription retry mapping', async () => {
+    consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      text: jest.fn().mockResolvedValue('{"code":"AUDIO_URL_EXPIRED"}'),
+    } as unknown as Response);
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    await expect(
+      service.requestAnalysisTranscription(
+        {
+          jobId: 'job-id',
+          recordingId: 'recording-id',
+          audioUrl: 'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+          mode: 'full',
+          language: 'ko',
+          speakerDiarization: true,
+          glossary: [],
+          subjectContext: {
+            subject: { addressTerm: null, name: null },
+            familyMembers: [],
+            glossaryTerms: [],
+          },
+          intakeContext: null,
+        },
+        {
+          ownerUserId: 'user-id',
+          subjectId: 'subject-id',
+        },
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: 'AUDIO_URL_EXPIRED',
+    });
+    await expect(
+      service.requestAnalysisTranscription(
+        {
+          jobId: 'job-id',
+          recordingId: 'recording-id',
+          audioUrl: 'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+          mode: 'full',
+          language: 'ko',
+          speakerDiarization: true,
+          glossary: [],
+          subjectContext: {
+            subject: { addressTerm: null, name: null },
+            familyMembers: [],
+            glossaryTerms: [],
+          },
+          intakeContext: null,
+        },
+        {
+          ownerUserId: 'user-id',
+          subjectId: 'subject-id',
+        },
+      ),
+    ).rejects.toBeInstanceOf(AiServerHttpError);
   });
 
   it('blocks configured provider calls when consent context is missing', async () => {

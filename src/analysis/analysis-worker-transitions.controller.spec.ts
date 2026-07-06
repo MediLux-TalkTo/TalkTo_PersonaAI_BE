@@ -4,6 +4,7 @@ import { ROLES_KEY } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { AnalysisAiTranscriptionService } from './analysis-ai-transcription.service';
 import { AnalysisJobStatus } from './analysis-job.constants';
 import { AnalysisWorkerTransitionsController } from './analysis-worker-transitions.controller';
 import { AnalysisWorkerTransitionsService } from './analysis-worker-transitions.service';
@@ -28,6 +29,9 @@ describe('AnalysisWorkerTransitionsController', () => {
     markCompleted: jest.fn(),
     markFailed: jest.fn(),
     toDto: jest.fn((value: unknown) => value),
+  };
+  const aiTranscriptionService = {
+    requestAndPersistTranscription: jest.fn(),
   };
   let controller: AnalysisWorkerTransitionsController;
 
@@ -62,10 +66,20 @@ describe('AnalysisWorkerTransitionsController', () => {
       id: 'job-id',
       status: AnalysisJobStatus.FAILED_RETRYABLE,
     });
+    aiTranscriptionService.requestAndPersistTranscription.mockResolvedValue({
+      id: 'job-id',
+      status: AnalysisJobStatus.STT_PROCESSING,
+    });
 
     const moduleRef = await Test.createTestingModule({
       controllers: [AnalysisWorkerTransitionsController],
-      providers: [{ provide: AnalysisWorkerTransitionsService, useValue: service }],
+      providers: [
+        { provide: AnalysisWorkerTransitionsService, useValue: service },
+        {
+          provide: AnalysisAiTranscriptionService,
+          useValue: aiTranscriptionService,
+        },
+      ],
     }).compile();
 
     controller = moduleRef.get(AnalysisWorkerTransitionsController);
@@ -154,6 +168,19 @@ describe('AnalysisWorkerTransitionsController', () => {
     expect(service.markSegmenting).toHaveBeenCalledWith('job-id', segmentingDto);
     expect(service.markCompleted).toHaveBeenCalledWith('job-id');
     expect(service.markFailed).toHaveBeenCalledWith('job-id', failedDto);
+  });
+
+  it('routes provider transcription requests through the AI transcription service', async () => {
+    await expect(
+      controller.requestProviderTranscription('job-id', { mode: 'preview' }),
+    ).resolves.toEqual(
+      successEnvelope({ id: 'job-id', status: AnalysisJobStatus.STT_PROCESSING }),
+    );
+
+    expect(aiTranscriptionService.requestAndPersistTranscription).toHaveBeenCalledWith(
+      'job-id',
+      'preview',
+    );
   });
 
   it('requires JWT auth, roles guard, and admin role metadata', () => {

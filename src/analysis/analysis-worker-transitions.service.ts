@@ -48,9 +48,7 @@ export class AnalysisWorkerTransitionsService {
         : [AnalysisJobStatus.PREPROCESSING];
     this.transitionThrough(job, path);
     this.refreshLease(job, dto.workerId);
-    const savedJob = await this.saveJobAndProgress(job, recording);
-    await this.notificationsService.notifyAnalysisCompleted(savedJob);
-    return savedJob;
+    return this.saveJobAndProgress(job, recording);
   }
 
   async markStt(jobId: string, dto: MarkSttDto): Promise<AnalysisJob> {
@@ -74,6 +72,7 @@ export class AnalysisWorkerTransitionsService {
         endMs: segment.endMs,
         speakerLabel: segment.speakerLabel ?? UNKNOWN_SPEAKER_LABEL,
         transcriptText: segment.transcriptText,
+        confidence: segment.confidence ?? null,
       })),
       {
         conflictPaths: ['jobId', 'segmentIndex'],
