@@ -94,18 +94,22 @@ describe('AnalysisAiTranscriptionService', () => {
       mode: 'preview',
       language: 'ko',
       speakerDiarization: true,
-      glossary: ['정읍', '매실청'],
+      glossary: ['정읍', '정으비', '매실청'],
       subjectContext: {
         subject: { addressTerm: '외할머니', name: '신금자' },
         familyMembers: [],
-        glossaryTerms: ['정읍', '매실청'],
+        glossaryTerms: ['정읍', '정으비', '매실청'],
       },
       intakeContext: {
         basicProfile: { birthPlace: '정읍' },
         familyMap: { eldest: '종서' },
         sttHints: {
-          names: ['신금자', '정읍', '매실청'],
-          voiceSampleRef: { documentId: 'sample-id' },
+          names: ['신금자', '정읍', '정으비', '매실청'],
+          voiceSampleRef: {
+            documentId: 'sample-id',
+            startMs: 12000,
+            endMs: 25000,
+          },
         },
       },
     });
@@ -135,6 +139,8 @@ describe('AnalysisAiTranscriptionService', () => {
             startMs: 0,
             endMs: 1200,
             text: '정읍 이야기',
+            correctedText: '정읍 이야기입니다',
+            needsReview: true,
             confidence: 0.93,
           },
         ],
@@ -156,6 +162,8 @@ describe('AnalysisAiTranscriptionService', () => {
           endMs: 1200,
           speakerLabel: undefined,
           transcriptText: '정읍 이야기',
+          correctedText: '정읍 이야기입니다',
+          needsReview: true,
           confidence: 0.93,
         },
       ],
@@ -215,7 +223,10 @@ function buildSubject(): Subject {
     relationship: '외할머니',
     localeHint: 'ko',
     glossaryTerms: [
-      Object.assign(new FamilyGlossaryTerm(), { term: '정읍' }),
+      Object.assign(new FamilyGlossaryTerm(), {
+        term: '정읍',
+        pronunciationHint: '정으비',
+      }),
       Object.assign(new FamilyGlossaryTerm(), { term: '매실청' }),
       Object.assign(new FamilyGlossaryTerm(), { term: '정읍' }),
     ],
@@ -247,5 +258,7 @@ function buildSample(): TargetVoiceSample {
   return Object.assign(new TargetVoiceSample(), {
     id: 'sample-id',
     applicationId: 'application-id',
+    startMs: 12000,
+    endMs: 25000,
   });
 }

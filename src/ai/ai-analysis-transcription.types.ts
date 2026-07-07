@@ -53,6 +53,8 @@ export type AiAnalysisTranscriptionSegment = {
   readonly speakerLabel?: string;
   readonly transcriptText?: string;
   readonly text?: string;
+  readonly correctedText?: string | null;
+  readonly needsReview?: boolean;
   readonly confidence?: number;
 };
 

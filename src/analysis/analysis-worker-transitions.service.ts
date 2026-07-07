@@ -72,6 +72,8 @@ export class AnalysisWorkerTransitionsService {
         endMs: segment.endMs,
         speakerLabel: segment.speakerLabel ?? UNKNOWN_SPEAKER_LABEL,
         transcriptText: segment.transcriptText,
+        correctedText: segment.correctedText ?? null,
+        needsReview: segment.needsReview ?? false,
         confidence: segment.confidence ?? null,
       })),
       {

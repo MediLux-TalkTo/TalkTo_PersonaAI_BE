@@ -175,6 +175,35 @@ describe('VoicePersonaService', () => {
     });
   });
 
+  it('stores selected target voice sample ranges and rejects invalid ranges', async () => {
+    applicationsRepository.findOne.mockResolvedValue(buildApplication());
+
+    await expect(
+      service.createTargetVoiceSample('application-id', 'user-id', {
+        recordingId: '3b1cae30-77ef-4556-bbb1-4c3cb048e713',
+        startMs: 12000,
+        endMs: 25000,
+      }),
+    ).resolves.toMatchObject({
+      recordingId: '3b1cae30-77ef-4556-bbb1-4c3cb048e713',
+      startMs: 12000,
+      endMs: 25000,
+      reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
+    });
+
+    await expect(
+      service.createTargetVoiceSample('application-id', 'user-id', {
+        recordingId: '3b1cae30-77ef-4556-bbb1-4c3cb048e713',
+        startMs: 25000,
+        endMs: 12000,
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'voice_sample_range_invalid',
+      }),
+    });
+  });
+
   it('reviews documents and writes sanitized admin audit metadata', async () => {
     documentsRepository.findOne.mockResolvedValue({
       id: 'document-id',

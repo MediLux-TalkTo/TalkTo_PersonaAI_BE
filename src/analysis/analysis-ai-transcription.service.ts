@@ -104,6 +104,8 @@ export class AnalysisAiTranscriptionService {
           endMs: segment.endMs,
           speakerLabel: segment.speakerLabel,
           transcriptText: this.transcriptText(segment),
+          correctedText: segment.correctedText ?? null,
+          needsReview: segment.needsReview ?? false,
           confidence: segment.confidence,
         })),
       });

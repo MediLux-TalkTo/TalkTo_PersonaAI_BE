@@ -2,11 +2,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayMinSize,
   IsArray,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class CreateVoicePersonaApplicationDto {
@@ -60,4 +62,16 @@ export class CreateTargetVoiceSampleDto {
   @IsString()
   @MaxLength(500)
   storageKey?: string;
+
+  @ApiPropertyOptional({ example: 12000, minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  startMs?: number;
+
+  @ApiPropertyOptional({ example: 25000, minimum: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  endMs?: number;
 }

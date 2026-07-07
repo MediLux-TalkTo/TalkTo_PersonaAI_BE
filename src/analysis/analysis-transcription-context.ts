@@ -20,9 +20,10 @@ export function buildGlossaryTerms(
   glossaryTerms: readonly FamilyGlossaryTerm[],
 ): readonly string[] {
   return uniqueStrings(
-    glossaryTerms
-      .map((term) => term.term.trim())
-      .filter((term) => term.length > 0),
+    glossaryTerms.flatMap((term) => [
+      term.term.trim(),
+      term.pronunciationHint?.trim() ?? '',
+    ]),
   );
 }
 
@@ -74,6 +75,8 @@ export function mapIntakeContext(input: {
         ? {
             voiceSampleRef: {
               documentId: input.sample.id,
+              ...(input.sample.startMs !== null ? { startMs: input.sample.startMs } : {}),
+              ...(input.sample.endMs !== null ? { endMs: input.sample.endMs } : {}),
             },
           }
         : {}),

@@ -50,6 +50,12 @@ export class TranscriptSegment {
   @Column({ type: 'text' })
   transcriptText: string;
 
+  @Column({ type: 'text', nullable: true })
+  correctedText: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  needsReview: boolean;
+
   @Column({ type: 'double precision', nullable: true })
   confidence: number | null;
 

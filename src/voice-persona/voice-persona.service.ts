@@ -208,6 +208,7 @@ export class VoicePersonaService {
         message: 'A recordingId or storageKey is required for a voice sample.',
       });
     }
+    this.assertVoiceSampleRange(dto);
     const sample = await this.samplesRepository.save(
       this.samplesRepository.create({
         applicationId: application.id,
@@ -215,12 +216,31 @@ export class VoicePersonaService {
         subjectId: application.subjectId,
         recordingId: dto.recordingId ?? null,
         storageKey: dto.storageKey ?? null,
+        startMs: dto.startMs ?? null,
+        endMs: dto.endMs ?? null,
         reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
       }),
     );
     application.voiceSampleStatus = VoicePersonaReviewStatus.PENDING_REVIEW;
     await this.applicationsRepository.save(application);
     return sample;
+  }
+
+  private assertVoiceSampleRange(dto: CreateTargetVoiceSampleDto): void {
+    const hasStart = dto.startMs !== undefined;
+    const hasEnd = dto.endMs !== undefined;
+    if (hasStart !== hasEnd) {
+      throw new BadRequestException({
+        code: 'voice_sample_range_incomplete',
+        message: 'Both startMs and endMs are required when selecting a voice sample range.',
+      });
+    }
+    if (dto.startMs !== undefined && dto.endMs !== undefined && dto.endMs < dto.startMs) {
+      throw new BadRequestException({
+        code: 'voice_sample_range_invalid',
+        message: 'Voice sample endMs must be greater than or equal to startMs.',
+      });
+    }
   }
 
   async getBuildStatus(applicationId: string, ownerUserId: string) {

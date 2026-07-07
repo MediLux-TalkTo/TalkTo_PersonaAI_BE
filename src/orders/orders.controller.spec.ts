@@ -1,5 +1,4 @@
 import { Test } from '@nestjs/testing';
-import { success } from '../common/utils/api-response';
 import { OrderPaymentStatus, PaymentProvider } from './order.constants';
 import { Order } from './order.entity';
 import { OrdersController } from './orders.controller';
@@ -44,7 +43,15 @@ describe('OrdersController', () => {
 
     await expect(
       ordersController.createOrder(createOrderDto, currentUser),
-    ).resolves.toEqual(success(serviceResponse));
+    ).resolves.toMatchObject({
+      success: true,
+      data: serviceResponse,
+      meta: {
+        timestamp: expect.stringMatching(
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+        ),
+      },
+    });
 
     expect(ordersService.createOrder).toHaveBeenCalledWith({
       ownerUserId: currentUser.userId,

@@ -29,6 +29,12 @@ export class TargetVoiceSample {
   @Column({ type: 'varchar', length: 500, nullable: true })
   storageKey: string | null;
 
+  @Column({ type: 'integer', nullable: true })
+  startMs: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  endMs: number | null;
+
   @Column({ type: 'varchar', length: 40, default: VoicePersonaReviewStatus.PENDING_REVIEW })
   reviewStatus: VoicePersonaReviewStatus;
 

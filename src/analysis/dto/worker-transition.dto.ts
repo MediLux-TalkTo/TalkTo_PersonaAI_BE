@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -51,6 +52,17 @@ export class TranscriptSegmentInputDto {
   @IsString()
   @MaxLength(20000)
   transcriptText: string;
+
+  @ApiPropertyOptional({ example: 'Corrected transcript.', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  correctedText?: string | null;
+
+  @ApiPropertyOptional({ example: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  needsReview?: boolean;
 
   @ApiPropertyOptional({ example: 0.92, minimum: 0, maximum: 1 })
   @IsOptional()

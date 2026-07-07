@@ -76,6 +76,8 @@ describe('AnalysisWorkerTransitionsService', () => {
             startMs: 0,
             endMs: 2500,
             transcriptText: 'Synthetic redacted hello.',
+            correctedText: 'Synthetic corrected hello.',
+            needsReview: true,
             confidence: 0.91,
           },
         ],
@@ -91,6 +93,8 @@ describe('AnalysisWorkerTransitionsService', () => {
         segmentIndex: 0,
         speakerLabel: 'unknown',
         transcriptText: 'Synthetic redacted hello.',
+        correctedText: 'Synthetic corrected hello.',
+        needsReview: true,
         confidence: 0.91,
       }),
     ], expect.objectContaining({ conflictPaths: ['jobId', 'segmentIndex'] }));
