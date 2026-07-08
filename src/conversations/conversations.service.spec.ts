@@ -2,6 +2,7 @@ import { DataSource, Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
 import { ConsentFeature } from '../common/enums/consent.enums';
+import { Role } from '../common/enums/role.enum';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
@@ -112,6 +113,90 @@ describe('ConversationsService AI consent context', () => {
         assistant_message: '기억해둘게요.',
       },
       memoriesConsentContext,
+    );
+  });
+
+  it('returns a TTS URL for text assistant responses', async () => {
+    const manager = {
+      create: jest.fn((entity: unknown, value: unknown) => value),
+      save: jest.fn(async (value: { id?: string; senderType?: string; messageId?: string }) => ({
+        ...value,
+        id:
+          value.id ??
+          (value.senderType
+            ? `${value.senderType.toLowerCase()}-message-id`
+            : 'voice-artifact-id'),
+      })),
+    };
+    const dataSource = {
+      transaction: jest.fn((handler) => handler(manager)),
+    };
+    const personasService = {
+      getActivePersona: jest.fn().mockResolvedValue({
+        id: 'persona-id',
+        displayName: '할머니',
+        description: '조립된 페르소나 프롬프트',
+        voiceId: 'voice-id',
+      }),
+    };
+    const chatRuntimeService = {
+      generateAssistantReply: jest.fn().mockResolvedValue({
+        content: '응답입니다.',
+        retrievedMemoryIds: [],
+        latencyMs: 10,
+        usedFallback: false,
+      }),
+    };
+    const aiClientService = {
+      extractMemory: jest.fn().mockResolvedValue(null),
+      synthesizeSpeech: jest.fn().mockResolvedValue(Buffer.from('mp3')),
+    };
+    const audioStorageService = {
+      saveMp3: jest.fn().mockResolvedValue({
+        storageKey: 'tts/message.mp3',
+        url: '/audio/tts/message.mp3',
+      }),
+    };
+    const service = new ConversationsService(
+      dataSource as unknown as DataSource,
+      personasService as unknown as PersonasService,
+      chatRuntimeService as unknown as ChatRuntimeService,
+      aiClientService as unknown as AiClientService,
+      { create: jest.fn() } as unknown as MemoriesService,
+      { retrieve: jest.fn().mockResolvedValue([]) } as unknown as MemoryRetrievalService,
+      audioStorageService as unknown as AudioStorageService,
+      { recordLog: jest.fn() } as unknown as AdminService,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'conversation-id',
+          userId: ownerUserId,
+          lastMessageAt: null,
+        }),
+      } as unknown as Repository<Conversation>,
+      { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<Message>,
+      {} as Repository<MessageMemoryRef>,
+      {} as Repository<VoiceArtifact>,
+    );
+
+    await expect(
+      service.sendTextMessage(
+        'conversation-id',
+        { userId: ownerUserId, role: Role.FAMILY },
+        { content: '안녕' },
+      ),
+    ).resolves.toMatchObject({
+      assistantMessage: {
+        content: '응답입니다.',
+        ttsAudioUrl: '/audio/tts/message.mp3',
+        fallbackTextUsed: false,
+      },
+    });
+    expect(audioStorageService.saveMp3).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buffer: Buffer.from('mp3'),
+        conversationId: 'conversation-id',
+        messageId: 'assistant-message-id',
+      }),
     );
   });
 });

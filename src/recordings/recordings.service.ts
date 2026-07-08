@@ -105,6 +105,7 @@ export class RecordingsService {
         fileSizeBytes: String(dto.fileSizeBytes),
         durationSeconds: dto.durationSeconds ?? null,
         memo: dto.memo ?? null,
+        conversationPartnerName: dto.conversationPartnerName ?? null,
         relatedQuestionId: dto.relatedQuestionId ?? null,
         relatedQuestionText: dto.relatedQuestionText ?? null,
         fileHash: dto.fileHash ?? null,
@@ -297,6 +298,9 @@ export class RecordingsService {
 
     if (dto.memo !== undefined) {
       recording.memo = dto.memo;
+    }
+    if (dto.conversationPartnerName !== undefined) {
+      recording.conversationPartnerName = dto.conversationPartnerName;
     }
     if (dto.relatedQuestionId !== undefined) {
       recording.relatedQuestionId = dto.relatedQuestionId;
@@ -578,6 +582,7 @@ export class RecordingsService {
       memories_status: recording.memoriesStatus,
       checksum_status: recording.checksumStatus,
       memo: recording.memo,
+      conversation_partner_name: recording.conversationPartnerName,
       related_question_id: recording.relatedQuestionId,
       related_question_text: recording.relatedQuestionText,
       uploaded_at: recording.uploadedAt,

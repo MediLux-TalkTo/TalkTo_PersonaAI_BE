@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AiModule } from '../ai/ai.module';
+import { TranscriptSegment } from '../analysis/transcript-segment.entity';
 import { ConsentsModule } from '../consents/consents.module';
 import { EventsModule } from '../events/events.module';
 import { Entitlement } from '../payments/entitlement.entity';
+import { Subject } from '../subjects/subject.entity';
 import { SubjectsModule } from '../subjects/subjects.module';
 import { AuditModule } from '../audit/audit.module';
 import { AdminVoicePersonaController } from './admin-voice-persona.controller';
@@ -31,7 +34,10 @@ import { VoicePersonaService } from './voice-persona.service';
       PersonaFamilyReview,
       PersonaRuntimeConfig,
       Entitlement,
+      Subject,
+      TranscriptSegment,
     ]),
+    AiModule,
     AuditModule,
     ConsentsModule,
     EventsModule,

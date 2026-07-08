@@ -10,10 +10,8 @@ import { TargetVoiceSample } from '../voice-persona/target-voice-sample.entity';
 type IntakeSectionName =
   | 'basicProfile'
   | 'familyMap'
-  | 'timeline'
   | 'speechStyle'
   | 'personality'
-  | 'sensoryMemories'
   | 'situationalReactions';
 
 export function buildGlossaryTerms(
@@ -48,12 +46,12 @@ export function mapIntakeContext(input: {
   readonly sample: TargetVoiceSample | null;
 }): AiIntakeContext {
   const sections = emptyIntakeSections();
-  let memoryCards: readonly unknown[] = [];
-  let tabooTopics: readonly unknown[] = [];
+  let memoryCards = sections.memoryCards;
+  let tabooTopics = sections.tabooTopics;
   for (const section of input.intake.sections) {
     const sectionName = intakeSectionName(section.sectionKey);
     if (sectionName) {
-      sections[sectionName] = section.answers;
+      assignIntakeSection(sections, sectionName, section.answers);
       continue;
     }
     const arraySectionName = intakeArraySectionName(section.sectionKey);
@@ -61,7 +59,11 @@ export function mapIntakeContext(input: {
       memoryCards = firstArrayField(section.answers, ['memoryCards', 'cards', 'items']);
     }
     if (arraySectionName === 'tabooTopics') {
-      tabooTopics = firstArrayField(section.answers, ['tabooTopics', 'topics', 'items']);
+      tabooTopics = stringArraySectionValue(section.answers, [
+        'tabooTopics',
+        'topics',
+        'items',
+      ]);
     }
   }
 
@@ -84,15 +86,25 @@ export function mapIntakeContext(input: {
   };
 }
 
-function emptyIntakeSections(): Record<IntakeSectionName, Record<string, unknown>> {
+type IntakeSections = {
+  basicProfile: Readonly<Record<string, unknown>>;
+  speechStyle: string;
+  personality: string;
+  familyMap: readonly unknown[];
+  situationalReactions: readonly unknown[];
+  memoryCards: readonly unknown[];
+  tabooTopics: readonly string[];
+};
+
+function emptyIntakeSections(): IntakeSections {
   return {
     basicProfile: {},
-    familyMap: {},
-    timeline: {},
-    speechStyle: {},
-    personality: {},
-    sensoryMemories: {},
-    situationalReactions: {},
+    speechStyle: '',
+    personality: '',
+    familyMap: [],
+    situationalReactions: [],
+    memoryCards: [],
+    tabooTopics: [],
   };
 }
 
@@ -104,14 +116,10 @@ function intakeSectionName(sectionKey: string): IntakeSectionName | null {
       return 'basicProfile';
     case 'familymap':
       return 'familyMap';
-    case 'timeline':
-      return 'timeline';
     case 'speechstyle':
       return 'speechStyle';
     case 'personality':
       return 'personality';
-    case 'sensorymemories':
-      return 'sensoryMemories';
     case 'situationalreactions':
       return 'situationalReactions';
     default:
@@ -131,6 +139,34 @@ function intakeArraySectionName(sectionKey: string): 'memoryCards' | 'tabooTopic
   }
 }
 
+function assignIntakeSection(
+  sections: IntakeSections,
+  sectionName: IntakeSectionName,
+  answers: Readonly<Record<string, unknown>>,
+): void {
+  switch (sectionName) {
+    case 'basicProfile':
+      sections.basicProfile = answers;
+      return;
+    case 'speechStyle':
+      sections.speechStyle = stringSectionValue(answers);
+      return;
+    case 'personality':
+      sections.personality = stringSectionValue(answers);
+      return;
+    case 'familyMap':
+      sections.familyMap = arraySectionValue(answers, ['familyMap', 'members', 'items']);
+      return;
+    case 'situationalReactions':
+      sections.situationalReactions = arraySectionValue(answers, [
+        'situationalReactions',
+        'reactions',
+        'items',
+      ]);
+      return;
+  }
+}
+
 function normalizeSectionKey(sectionKey: string): string {
   return sectionKey.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -146,6 +182,30 @@ function firstArrayField(
     }
   }
   return [];
+}
+
+function arraySectionValue(
+  section: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): readonly unknown[] {
+  return firstArrayField(section, keys);
+}
+
+function stringArraySectionValue(
+  section: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): readonly string[] {
+  return firstArrayField(section, keys).filter(
+    (value): value is string => typeof value === 'string',
+  );
+}
+
+function stringSectionValue(section: Readonly<Record<string, unknown>>): string {
+  const direct = section.value ?? section.text ?? section.content ?? section.answer;
+  if (typeof direct === 'string') {
+    return direct;
+  }
+  return '';
 }
 
 function uniqueStrings(values: readonly string[]): readonly string[] {

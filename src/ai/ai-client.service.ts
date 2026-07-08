@@ -13,8 +13,15 @@ import {
 import type {
   AiAnalysisTranscriptionRequest,
   AiAnalysisTranscriptionResponse,
+  AiPersonaAssemblyRequest,
+  AiPersonaAssemblyResponse,
+  AiPersonaResponse,
+  AiPersonaResponseRequest,
 } from './ai-analysis-transcription.types';
 import { AiServerHttpError } from './ai-server-http.error';
+
+const DEFAULT_AI_SERVER_TIMEOUT_MS = 45000;
+const MIN_TRANSCRIPTION_TIMEOUT_MS = 120000;
 
 export interface AiChatMemory {
   id: string;
@@ -32,6 +39,7 @@ export interface AiChatRequest {
   message: string;
   history: AiChatHistoryItem[];
   memories: AiChatMemory[];
+  persona?: AiPersonaResponseRequest['persona'];
 }
 
 export interface AiChatResponse {
@@ -93,9 +101,13 @@ export class AiClientService {
     }
     await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    const response = await this.postJson<AiChatResponse>(
-      '/ai/chat',
-      this.prepareProviderPayload('llm_chat', request, true),
+    const path = request.persona ? '/v1/persona/responses' : '/ai/chat';
+    const operation: ProviderCallOperation = request.persona
+      ? 'persona_response'
+      : 'llm_chat';
+    const response = await this.postJson<AiPersonaResponse>(
+      path,
+      this.prepareProviderPayload(operation, request, true),
     );
 
     if (!response.content || typeof response.content !== 'string') {
@@ -104,9 +116,7 @@ export class AiClientService {
 
     return {
       content: response.content,
-      retrieved_memory_ids: Array.isArray(response.retrieved_memory_ids)
-        ? response.retrieved_memory_ids
-        : [],
+      retrieved_memory_ids: this.retrievedMemoryIds(response),
       latency_ms:
         typeof response.latency_ms === 'number' ? response.latency_ms : undefined,
     };
@@ -160,6 +170,7 @@ export class AiClientService {
     const response = await this.postJson<AiAnalysisTranscriptionResponse>(
       '/v1/analysis/transcriptions',
       this.prepareProviderPayload('stt', request, false),
+      { timeoutMs: this.transcriptionTimeoutMs() },
     );
 
     if (!Array.isArray(response.segments)) {
@@ -226,6 +237,30 @@ export class AiClientService {
     return Buffer.from(await response.arrayBuffer());
   }
 
+  async assemblePersona(
+    request: AiPersonaAssemblyRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiPersonaAssemblyResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(
+      consentContext,
+      ConsentFeature.VOICE_PERSONA,
+    );
+
+    const response = await this.postJson<AiPersonaAssemblyResponse>(
+      '/v1/persona/assembly',
+      this.prepareProviderPayload('persona_assembly', request, true),
+    );
+
+    if (!response.instructions || typeof response.instructions !== 'string') {
+      throw new Error('AI persona assembly response is missing instructions.');
+    }
+
+    return response;
+  }
+
   private async assertProviderConsents(
     consentContext: AiProviderConsentContext | undefined,
     fallbackFeature: ConsentFeature,
@@ -254,12 +289,13 @@ export class AiClientService {
   private async postJson<TResponse>(
     path: string,
     payload: unknown,
+    options: { readonly timeoutMs?: number } = {},
   ): Promise<TResponse> {
     const response = await this.request(path, {
       method: 'POST',
       headers: this.buildJsonHeaders(),
       body: JSON.stringify(payload),
-    });
+    }, options);
 
     return (await response.json()) as TResponse;
   }
@@ -288,7 +324,11 @@ export class AiClientService {
     });
   }
 
-  private async request(path: string, init: RequestInit): Promise<Response> {
+  private async request(
+    path: string,
+    init: RequestInit,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<Response> {
     const baseUrl = this.getBaseUrl();
 
     if (!baseUrl) {
@@ -296,7 +336,10 @@ export class AiClientService {
     }
 
     const controller = new AbortController();
-    const timeoutMs = this.configService.get<number>('AI_SERVER_TIMEOUT_MS') ?? 45000;
+    const timeoutMs =
+      options.timeoutMs ??
+      this.configService.get<number>('AI_SERVER_TIMEOUT_MS') ??
+      DEFAULT_AI_SERVER_TIMEOUT_MS;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -370,5 +413,23 @@ export class AiClientService {
     }
 
     return rawUrl.replace(/\/+$/, '');
+  }
+
+  private transcriptionTimeoutMs(): number {
+    const configured =
+      this.configService.get<number>('AI_SERVER_TRANSCRIPTION_TIMEOUT_MS') ??
+      this.configService.get<number>('AI_SERVER_TIMEOUT_MS') ??
+      DEFAULT_AI_SERVER_TIMEOUT_MS;
+    return Math.max(configured, MIN_TRANSCRIPTION_TIMEOUT_MS);
+  }
+
+  private retrievedMemoryIds(response: AiPersonaResponse): string[] {
+    if (Array.isArray(response.retrievedMemoryIds)) {
+      return [...response.retrievedMemoryIds];
+    }
+    if (Array.isArray(response.retrieved_memory_ids)) {
+      return [...response.retrieved_memory_ids];
+    }
+    return [];
   }
 }

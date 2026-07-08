@@ -50,6 +50,12 @@ export class CreateRecordingUploadIntentDto {
   @MaxLength(500)
   memo?: string;
 
+  @ApiPropertyOptional({ example: '찬민' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  conversationPartnerName?: string;
+
   @ApiPropertyOptional({ example: 'childhood-food' })
   @IsOptional()
   @IsString()

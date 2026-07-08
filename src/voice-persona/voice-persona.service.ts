@@ -6,6 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AiClientService } from '../ai/ai-client.service';
+import { TranscriptSegment } from '../analysis/transcript-segment.entity';
+import {
+  buildGlossaryTerms,
+  buildSubjectContext,
+  mapIntakeContext,
+} from '../analysis/analysis-transcription-context';
 import { AuditService } from '../audit/audit.service';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { ConsentsService } from '../consents/consents.service';
@@ -13,6 +20,7 @@ import { AppEventsService } from '../events/events.service';
 import { Entitlement } from '../payments/entitlement.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
 import { ProductFeature } from '../products/product.constants';
+import { Subject } from '../subjects/subject.entity';
 import { SubjectsService } from '../subjects/subjects.service';
 import {
   RegisterVoiceProviderAssetDto,
@@ -72,7 +80,12 @@ export class VoicePersonaService {
     private readonly runtimeConfigsRepository: Repository<PersonaRuntimeConfig>,
     @InjectRepository(Entitlement)
     private readonly entitlementsRepository: Repository<Entitlement>,
+    @InjectRepository(Subject)
+    private readonly subjectsRepository: Repository<Subject>,
+    @InjectRepository(TranscriptSegment)
+    private readonly transcriptSegmentsRepository: Repository<TranscriptSegment>,
     private readonly subjectsService: SubjectsService,
+    private readonly aiClientService: AiClientService,
     private readonly consentsService: ConsentsService,
     private readonly appEventsService: AppEventsService,
     private readonly auditService: AuditService,
@@ -193,7 +206,63 @@ export class VoicePersonaService {
     application.intakeStatus = 'submitted';
     application.submittedAt = now;
     await this.applicationsRepository.save(application);
-    return this.intakesRepository.save(intake);
+    const savedIntake = await this.intakesRepository.save(intake);
+    await this.assembleAndStorePersonaInstructions(application, savedIntake);
+    return savedIntake;
+  }
+
+  private async assembleAndStorePersonaInstructions(
+    application: VoicePersonaApplication,
+    intake: PersonaIntake,
+  ): Promise<void> {
+    const subject = await this.subjectsService.getOwned(
+      application.subjectId,
+      application.ownerUserId,
+    );
+    const glossaryTerms = buildGlossaryTerms(subject.glossaryTerms ?? []);
+    const sample = await this.samplesRepository.findOne({
+      where: { applicationId: application.id },
+      order: { createdAt: 'DESC' },
+    });
+    const assembly = await this.aiClientService.assemblePersona(
+      {
+        subjectContext: buildSubjectContext({ subject, glossaryTerms }),
+        intakeContext: mapIntakeContext({
+          intake,
+          glossaryTerms,
+          subjectName: subject.displayName,
+          sample,
+        }),
+        speechExamples: await this.loadSpeechExamples(application),
+      },
+      {
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    if (!assembly) {
+      return;
+    }
+    subject.assembledPersonaInstructions = assembly.instructions;
+    await this.subjectsRepository.save(subject);
+  }
+
+  private async loadSpeechExamples(
+    application: VoicePersonaApplication,
+  ): Promise<readonly string[]> {
+    const segments = await this.transcriptSegmentsRepository.find({
+      where: {
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+      },
+      order: { updatedAt: 'DESC' },
+      take: 200,
+    });
+    return segments
+      .map((segment) => (segment.correctedText ?? segment.transcriptText).trim())
+      .filter((text) => text.length >= 6 && text.length <= 40)
+      .slice(0, 50);
   }
 
   async createTargetVoiceSample(

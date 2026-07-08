@@ -1,8 +1,10 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { TranscriptSegment } from '../analysis/transcript-segment.entity';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { Entitlement } from '../payments/entitlement.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
 import { ProductFeature } from '../products/product.constants';
+import { Subject } from '../subjects/subject.entity';
 import { VoicePersonaService } from './voice-persona.service';
 import { VoicePersonaApplication } from './voice-persona-application.entity';
 import {
@@ -21,11 +23,16 @@ describe('VoicePersonaService', () => {
   const providerAssetsRepository = repoMock();
   const familyReviewsRepository = repoMock();
   const runtimeConfigsRepository = repoMock();
+  const subjectsRepository = repoMock();
+  const transcriptSegmentsRepository = repoMock();
   const entitlementsRepository = {
     find: jest.fn(),
   };
   const subjectsService = {
     getOwned: jest.fn(),
+  };
+  const aiClientService = {
+    assemblePersona: jest.fn(),
   };
   const consentsService = {
     assertRequiredConsents: jest.fn(),
@@ -50,13 +57,21 @@ describe('VoicePersonaService', () => {
       providerAssetsRepository,
       familyReviewsRepository,
       runtimeConfigsRepository,
+      subjectsRepository,
+      transcriptSegmentsRepository,
     ]) {
       repository.create.mockImplementation((input) => input);
       repository.save.mockImplementation((input) =>
         Promise.resolve({ id: input.id ?? `${repository.name}-id`, ...input }),
       );
     }
-    subjectsService.getOwned.mockResolvedValue({ id: 'subject-id' });
+    subjectsService.getOwned.mockResolvedValue(buildSubject());
+    transcriptSegmentsRepository.find.mockResolvedValue([buildTranscriptSegment()]);
+    samplesRepository.findOne.mockResolvedValue(null);
+    aiClientService.assemblePersona.mockResolvedValue({
+      instructions: '조립된 페르소나 프롬프트',
+      subjectName: '신금자',
+    });
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     entitlementsRepository.find.mockResolvedValue([buildEntitlement()]);
     service = new VoicePersonaService(
@@ -70,7 +85,10 @@ describe('VoicePersonaService', () => {
       familyReviewsRepository as never,
       runtimeConfigsRepository as never,
       entitlementsRepository as never,
+      subjectsRepository as never,
+      transcriptSegmentsRepository as never,
       subjectsService as never,
+      aiClientService as never,
       consentsService as never,
       appEventsService as never,
       auditService as never,
@@ -158,6 +176,24 @@ describe('VoicePersonaService', () => {
       status: 'submitted',
       submittedAt: expect.any(Date),
     });
+    expect(aiClientService.assemblePersona).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intakeContext: expect.objectContaining({
+          sttHints: { names: ['신금자', '정읍', '정으비'] },
+        }),
+        speechExamples: ['뭐든지 적당히 하는 게 제일 힘든데.'],
+      }),
+      {
+        ownerUserId: 'user-id',
+        subjectId: 'subject-id',
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    expect(subjectsRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assembledPersonaInstructions: '조립된 페르소나 프롬프트',
+      }),
+    );
   });
 
   it('keeps build status locked until docs/intake/sample are approved', async () => {
@@ -335,4 +371,24 @@ function buildApplication(
   application.voiceSampleStatus = VoicePersonaReviewStatus.PENDING_REVIEW;
   application.buildStatus = VoicePersonaBuildStatus.LOCKED_UNTIL_REQUIREMENTS;
   return Object.assign(application, overrides);
+}
+
+function buildSubject(): Subject {
+  return Object.assign(new Subject(), {
+    id: 'subject-id',
+    ownerUserId: 'user-id',
+    displayName: '신금자',
+    relationship: '외할머니',
+    glossaryTerms: [
+      { term: '정읍', pronunciationHint: '정으비' },
+    ],
+  });
+}
+
+function buildTranscriptSegment(): TranscriptSegment {
+  return Object.assign(new TranscriptSegment(), {
+    id: 'transcript-segment-id',
+    transcriptText: '뭐든지 적당히 하는 게 제일 힘든데.',
+    correctedText: null,
+  });
 }

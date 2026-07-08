@@ -95,6 +95,7 @@ describe('RecordingsService', () => {
       originalFilename: 'call.m4a',
       mimeType: 'audio/mp4',
       fileSizeBytes: 1024,
+      conversationPartnerName: '찬민',
     });
 
     expect(subjectsService.getOwned).toHaveBeenCalledWith('subject-id', 'user-id');
@@ -105,8 +106,10 @@ describe('RecordingsService', () => {
         archiveStatus: 'pending_upload',
         analysisStage: 'not_analyzed',
         memoriesStatus: 'locked_until_memories',
+        conversationPartnerName: '찬민',
       }),
     );
+    expect(result.recording.conversation_partner_name).toBe('찬민');
     expect(uploadIntentsRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
         recordingId: 'recording-id',
@@ -330,6 +333,7 @@ describe('RecordingsService', () => {
       memoriesStatus: 'locked_until_memories',
       checksumStatus: 'not_supported',
       memo: null,
+      conversationPartnerName: '찬민',
       relatedQuestionId: null,
       relatedQuestionText: null,
       uploadedAt: new Date('2026-07-05T01:00:00.000Z'),
@@ -356,6 +360,7 @@ describe('RecordingsService', () => {
       id: 'recording-id',
       upload_status: RecordingUploadStatus.UPLOADED,
       archive_status: 'archived',
+      conversation_partner_name: '찬민',
     });
     expect(audioStorageService.verifyUploadObject).not.toHaveBeenCalled();
     expect(recordingsRepository.save).not.toHaveBeenCalled();

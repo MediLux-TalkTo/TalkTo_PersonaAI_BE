@@ -57,6 +57,9 @@ export class Recording {
   @Column({ type: 'text', nullable: true })
   memo: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  conversationPartnerName: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   relatedQuestionId: string | null;
 

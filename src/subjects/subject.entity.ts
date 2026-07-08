@@ -72,6 +72,9 @@ export class Subject {
   })
   personaStatus: SubjectReadinessStatusValue;
 
+  @Column({ type: 'text', nullable: true, select: false })
+  assembledPersonaInstructions: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

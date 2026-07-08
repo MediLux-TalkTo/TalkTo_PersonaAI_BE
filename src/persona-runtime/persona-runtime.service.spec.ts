@@ -10,10 +10,17 @@ describe('PersonaRuntimeService', () => {
   const memorySegmentsRepository = {
     find: jest.fn(),
   };
+  const embeddingsRepository = {
+    find: jest.fn(),
+  };
+  const subjectsRepository = {
+    createQueryBuilder: jest.fn(),
+  };
   const consentsService = {
     assertRequiredConsents: jest.fn(),
   };
   const aiClientService = {
+    embed: jest.fn(),
     chat: jest.fn(),
     synthesizeSpeech: jest.fn(),
   };
@@ -36,6 +43,24 @@ describe('PersonaRuntimeService', () => {
     runtimeConfigsRepository.findOne.mockResolvedValue(buildRuntimeConfig());
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     memorySegmentsRepository.find.mockResolvedValue([buildMemorySegment()]);
+    embeddingsRepository.find.mockResolvedValue([
+      {
+        id: 'embedding-id',
+        embedding: [1, 0],
+        memorySegmentId: 'memory-segment-id',
+        memorySegment: buildMemorySegment(),
+      },
+    ]);
+    subjectsRepository.createQueryBuilder.mockReturnValue({
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        id: 'subject-id',
+        assembledPersonaInstructions: '조립된 페르소나 프롬프트',
+      }),
+    });
+    aiClientService.embed.mockResolvedValue([1, 0]);
     aiClientService.chat.mockResolvedValue({ content: 'Persona answer.' });
     aiClientService.synthesizeSpeech.mockResolvedValue(Buffer.from('mp3'));
     audioStorageService.saveMp3.mockResolvedValue({
@@ -48,6 +73,8 @@ describe('PersonaRuntimeService', () => {
       messagesRepository as never,
       runtimeConfigsRepository as never,
       memorySegmentsRepository as never,
+      embeddingsRepository as never,
+      subjectsRepository as never,
       consentsService as never,
       aiClientService as never,
       audioStorageService as never,
@@ -93,9 +120,19 @@ describe('PersonaRuntimeService', () => {
     expect(aiClientService.chat).toHaveBeenCalledWith(
       expect.objectContaining({
         memories: [expect.objectContaining({ id: 'memory-segment-id' })],
+        persona: {
+          subjectId: 'subject-id',
+          instructions: '조립된 페르소나 프롬프트',
+          voiceId: null,
+        },
       }),
       expect.objectContaining({ feature: 'voice_persona' }),
     );
+    expect(aiClientService.embed).toHaveBeenCalledWith(
+      'Tell me a memory',
+      expect.objectContaining({ feature: 'voice_persona' }),
+    );
+    expect(memorySegmentsRepository.find).not.toHaveBeenCalled();
   });
 
   it('returns safe block response for blocked topics without calling the provider', async () => {

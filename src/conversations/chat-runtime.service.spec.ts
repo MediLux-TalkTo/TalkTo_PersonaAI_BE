@@ -7,7 +7,10 @@ describe('ChatRuntimeService', () => {
     feature: ConsentFeature.MEMORIES,
   };
   const persona = {
+    id: 'persona-id',
     displayName: '우리 할머니',
+    description: '조립된 페르소나 프롬프트',
+    voiceId: 'voice-id',
   } as any;
   const memory = {
     id: 'memory-1',
@@ -84,6 +87,11 @@ describe('ChatRuntimeService', () => {
             tags: ['sensitive'],
           },
         ],
+        persona: {
+          subjectId: 'persona-id',
+          instructions: '조립된 페르소나 프롬프트',
+          voiceId: 'voice-id',
+        },
       },
       consentContext,
     );

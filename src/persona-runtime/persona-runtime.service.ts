@@ -2,10 +2,12 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
+import { AnalysisEmbedding } from '../analysis/analysis-embedding.entity';
 import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { ConsentsService } from '../consents/consents.service';
 import { AppEventsService } from '../events/events.service';
+import { Subject } from '../subjects/subject.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
 import { CreatePersonaRuntimeMessageDto, CreatePersonaRuntimeSessionDto } from './dto/persona-runtime.dto';
@@ -13,6 +15,8 @@ import { PersonaRuntimeMessage } from './persona-runtime-message.entity';
 import { PersonaRuntimeSession } from './persona-runtime-session.entity';
 
 const SESSION_USAGE_LIMIT = 50;
+const RUNTIME_MEMORY_LIMIT = 5;
+const LOW_CONFIDENCE_THRESHOLD = 0.18;
 const BLOCKED_TOPIC_PATTERN = /\b(suicide|self-harm|kill|weapon|violence)\b|자살|자해|살해|무기|폭력/i;
 
 @Injectable()
@@ -26,6 +30,10 @@ export class PersonaRuntimeService {
     private readonly runtimeConfigsRepository: Repository<PersonaRuntimeConfig>,
     @InjectRepository(MemorySegment)
     private readonly memorySegmentsRepository: Repository<MemorySegment>,
+    @InjectRepository(AnalysisEmbedding)
+    private readonly embeddingsRepository: Repository<AnalysisEmbedding>,
+    @InjectRepository(Subject)
+    private readonly subjectsRepository: Repository<Subject>,
     private readonly consentsService: ConsentsService,
     private readonly aiClientService: AiClientService,
     private readonly audioStorageService: AudioStorageService,
@@ -77,7 +85,10 @@ export class PersonaRuntimeService {
         message: 'Persona runtime usage limit has been reached.',
       });
     }
-    await this.loadEnabledRuntimeConfig(session.applicationId, ownerUserId);
+    const runtimeConfig = await this.loadEnabledRuntimeConfig(
+      session.applicationId,
+      ownerUserId,
+    );
     await this.messagesRepository.save(
       this.messagesRepository.create({
         sessionId,
@@ -91,7 +102,7 @@ export class PersonaRuntimeService {
 
     const assistantDraft = BLOCKED_TOPIC_PATTERN.test(dto.text)
       ? await this.blockedResponse(session, ownerUserId)
-      : await this.answerWithRag(session, ownerUserId, dto.text);
+      : await this.answerWithRag(session, runtimeConfig, ownerUserId, dto.text);
     const assistantMessage = await this.messagesRepository.save(
       this.messagesRepository.create(assistantDraft),
     );
@@ -137,14 +148,14 @@ export class PersonaRuntimeService {
 
   private async answerWithRag(
     session: PersonaRuntimeSession,
+    runtimeConfig: PersonaRuntimeConfig,
     ownerUserId: string,
     text: string,
   ): Promise<Partial<PersonaRuntimeMessage>> {
-    const segments = await this.memorySegmentsRepository.find({
-      where: { ownerUserId, subjectId: session.subjectId },
-      order: { updatedAt: 'DESC' },
-      take: 3,
-    });
+    const [segments, subject] = await Promise.all([
+      this.retrieveRuntimeMemories(session, ownerUserId, text),
+      this.loadRuntimeSubject(runtimeConfig),
+    ]);
     const aiResponse = await this.aiClientService.chat(
       {
         message: text,
@@ -154,6 +165,11 @@ export class PersonaRuntimeService {
           title: `Memory ${segment.segmentIndex}`,
           content: segment.memoryText,
         })),
+        persona: {
+          subjectId: runtimeConfig.subjectId,
+          instructions: this.personaInstructions(subject),
+          voiceId: null,
+        },
       },
       {
         ownerUserId,
@@ -200,6 +216,63 @@ export class PersonaRuntimeService {
     };
   }
 
+  private async retrieveRuntimeMemories(
+    session: PersonaRuntimeSession,
+    ownerUserId: string,
+    text: string,
+  ): Promise<MemorySegment[]> {
+    const queryEmbedding = await this.aiClientService.embed(text, {
+      ownerUserId,
+      subjectId: session.subjectId,
+      feature: ConsentFeature.VOICE_PERSONA,
+    });
+    if (!queryEmbedding) {
+      return this.memorySegmentsRepository.find({
+        where: { ownerUserId, subjectId: session.subjectId },
+        order: { updatedAt: 'DESC' },
+        take: RUNTIME_MEMORY_LIMIT,
+      });
+    }
+    const embeddings = await this.embeddingsRepository.find({
+      where: { ownerUserId, subjectId: session.subjectId },
+      relations: ['memorySegment'],
+      take: 500,
+    });
+    return embeddings
+      .filter(
+        (embedding): embedding is AnalysisEmbedding & { memorySegment: MemorySegment } =>
+          Boolean(embedding.memorySegment),
+      )
+      .map((embedding) => ({
+        score: cosineSimilarity(queryEmbedding, embedding.embedding),
+        segment: embedding.memorySegment,
+      }))
+      .filter((result) => result.score >= LOW_CONFIDENCE_THRESHOLD)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, RUNTIME_MEMORY_LIMIT)
+      .map((result) => result.segment);
+  }
+
+  private async loadRuntimeSubject(
+    runtimeConfig: PersonaRuntimeConfig,
+  ): Promise<Subject | null> {
+    return this.subjectsRepository
+      .createQueryBuilder('subject')
+      .addSelect('subject.assembledPersonaInstructions')
+      .where('subject.id = :subjectId', { subjectId: runtimeConfig.subjectId })
+      .andWhere('subject.ownerUserId = :ownerUserId', {
+        ownerUserId: runtimeConfig.ownerUserId,
+      })
+      .getOne();
+  }
+
+  private personaInstructions(subject: Subject | null): string {
+    return (
+      subject?.assembledPersonaInstructions ??
+      'Answer as the approved Voice Persona. Use only supplied memories for factual recall.'
+    );
+  }
+
   private async loadEnabledRuntimeConfig(
     applicationId: string,
     ownerUserId: string,
@@ -215,4 +288,20 @@ export class PersonaRuntimeService {
     }
     return runtimeConfig;
   }
+}
+
+function cosineSimilarity(left: readonly number[], right: readonly number[]): number {
+  if (left.length === 0 || left.length !== right.length) {
+    return 0;
+  }
+  let dot = 0;
+  let leftMagnitude = 0;
+  let rightMagnitude = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index];
+    leftMagnitude += left[index] ** 2;
+    rightMagnitude += right[index] ** 2;
+  }
+  const denominator = Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude);
+  return denominator === 0 ? 0 : dot / denominator;
 }

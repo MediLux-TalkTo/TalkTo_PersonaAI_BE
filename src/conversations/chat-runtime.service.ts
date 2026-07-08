@@ -35,6 +35,11 @@ export class ChatRuntimeService {
         content: memory.bodyMarkdown,
         tags: memory.tags ?? [],
       })),
+      persona: {
+        subjectId: params.persona.id,
+        instructions: params.persona.description,
+        voiceId: params.persona.voiceId,
+      },
     }, params.consentContext);
 
     if (!aiResponse) {

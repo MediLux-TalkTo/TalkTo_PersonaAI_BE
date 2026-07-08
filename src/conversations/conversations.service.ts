@@ -113,6 +113,10 @@ export class ConversationsService {
       conversation.userId,
       ConsentFeature.MEMORIES,
     );
+    const voicePersonaConsentContext = this.buildProviderConsentContext(
+      conversation.userId,
+      ConsentFeature.VOICE_PERSONA,
+    );
     const persona = await this.personasService.getActivePersona();
     const history = await this.getConversationHistory(conversation.id);
     const relatedMemories = await this.memoryRetrievalService.retrieve(
@@ -151,6 +155,22 @@ export class ConversationsService {
       });
 
       const savedAssistantMessage = await manager.save(assistantMessage);
+      const ttsResult = await this.generateAndStoreTtsAudio({
+        conversationId,
+        messageId: savedAssistantMessage.id,
+        text: assistantReply.content,
+        consentContext: voicePersonaConsentContext,
+      });
+      const voiceArtifact = manager.create(VoiceArtifact, {
+        messageId: savedAssistantMessage.id,
+        audioInputUrl: null,
+        sttText: null,
+        ttsAudioUrl: ttsResult.ttsAudioUrl,
+        sttStatus: 'NOT_REQUIRED',
+        ttsStatus: ttsResult.ttsStatus,
+        fallbackTextUsed: ttsResult.fallbackTextUsed,
+      });
+      const savedVoiceArtifact = await manager.save(voiceArtifact);
 
       if (assistantReply.retrievedMemoryIds.length > 0) {
         const refs = assistantReply.retrievedMemoryIds.map((memoryId) =>
@@ -167,7 +187,11 @@ export class ConversationsService {
 
       return {
         userMessage: savedUserMessage,
-        assistantMessage: savedAssistantMessage,
+        assistantMessage: {
+          ...savedAssistantMessage,
+          ttsAudioUrl: savedVoiceArtifact.ttsAudioUrl,
+          fallbackTextUsed: savedVoiceArtifact.fallbackTextUsed,
+        },
       };
     });
 

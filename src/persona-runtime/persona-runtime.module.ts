@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiModule } from '../ai/ai.module';
+import { AnalysisEmbedding } from '../analysis/analysis-embedding.entity';
 import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentsModule } from '../consents/consents.module';
 import { EventsModule } from '../events/events.module';
 import { StorageModule } from '../storage/storage.module';
+import { Subject } from '../subjects/subject.entity';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
 import { PersonaRuntimeController } from './persona-runtime.controller';
 import { PersonaRuntimeMessage } from './persona-runtime-message.entity';
@@ -18,6 +20,8 @@ import { PersonaRuntimeSession } from './persona-runtime-session.entity';
       PersonaRuntimeMessage,
       PersonaRuntimeConfig,
       MemorySegment,
+      AnalysisEmbedding,
+      Subject,
     ]),
     AiModule,
     ConsentsModule,

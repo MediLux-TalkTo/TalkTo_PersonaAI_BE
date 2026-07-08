@@ -63,6 +63,9 @@ export class RecordingDto {
   @ApiProperty({ example: '엄마와 저녁 통화', nullable: true })
   memo: string | null;
 
+  @ApiProperty({ example: '찬민', nullable: true })
+  conversation_partner_name: string | null;
+
   @ApiProperty({ example: 'childhood-food', nullable: true })
   related_question_id: string | null;
 

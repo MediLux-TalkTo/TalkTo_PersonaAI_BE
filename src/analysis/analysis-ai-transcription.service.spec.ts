@@ -102,7 +102,24 @@ describe('AnalysisAiTranscriptionService', () => {
       },
       intakeContext: {
         basicProfile: { birthPlace: '정읍' },
-        familyMap: { eldest: '종서' },
+        speechStyle: '짧고 담담한 단문',
+        personality: '다정함',
+        familyMap: [
+          {
+            name: '종서',
+            relation: '막내아들',
+            tone: '담배 걱정하는 톤',
+          },
+        ],
+        situationalReactions: [
+          {
+            situation: '보고 싶어요',
+            response: '나도 보고 싶다.',
+            avoid: null,
+          },
+        ],
+        tabooTopics: ['상속'],
+        memoryCards: [{ title: '정읍', content: '정읍에서 살았다.' }],
         sttHints: {
           names: ['신금자', '정읍', '정으비', '매실청'],
           voiceSampleRef: {
@@ -249,7 +266,47 @@ function buildIntake(): PersonaIntake {
     status: 'submitted',
     sections: [
       { sectionKey: 'basicProfile', answers: { birthPlace: '정읍' } },
-      { sectionKey: 'familyMap', answers: { eldest: '종서' } },
+      {
+        sectionKey: 'speechStyle',
+        answers: { value: '짧고 담담한 단문' },
+      },
+      { sectionKey: 'personality', answers: { value: '다정함' } },
+      {
+        sectionKey: 'familyMap',
+        answers: {
+          items: [
+            {
+              name: '종서',
+              relation: '막내아들',
+              tone: '담배 걱정하는 톤',
+            },
+          ],
+        },
+      },
+      {
+        sectionKey: 'situationalReactions',
+        answers: {
+          items: [
+            {
+              situation: '보고 싶어요',
+              response: '나도 보고 싶다.',
+              avoid: null,
+            },
+          ],
+        },
+      },
+      {
+        sectionKey: 'tabooTopics',
+        answers: { items: ['상속'] },
+      },
+      {
+        sectionKey: 'memoryCards',
+        answers: { items: [{ title: '정읍', content: '정읍에서 살았다.' }] },
+      },
+      {
+        sectionKey: 'timeline',
+        answers: { items: [{ year: '1980', event: '미소비 필드' }] },
+      },
     ],
   });
 }

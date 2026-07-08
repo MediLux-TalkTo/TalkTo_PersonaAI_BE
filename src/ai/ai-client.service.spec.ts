@@ -91,6 +91,56 @@ describe('AiClientService', () => {
     });
   });
 
+  it('posts persona response requests with assembled instructions', async () => {
+    consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        content: '정읍에서 살았지.',
+        retrievedMemoryIds: ['memory-1'],
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+      }),
+    } as unknown as Response);
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    const result = await service.chat(
+      {
+        message: '어디 사셨어?',
+        history: [],
+        memories: [{ id: 'memory-1', title: '정읍', content: '정읍 기억' }],
+        persona: {
+          subjectId: 'subject-id',
+          instructions: '대상자 페르소나 프롬프트',
+          voiceId: null,
+        },
+      },
+      {
+        ownerUserId: 'user-id',
+        subjectId: 'subject-id',
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/persona/responses',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(String((global.fetch as jest.Mock).mock.calls[0]?.[1]?.body)).toContain(
+      '"instructions":"대상자 페르소나 프롬프트"',
+    );
+    expect(result).toEqual({
+      content: '정읍에서 살았지.',
+      retrieved_memory_ids: ['memory-1'],
+      latency_ms: undefined,
+    });
+  });
+
   it('redacts outbound LLM payload before reaching the provider adapter', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     const fetchMock = jest.fn().mockResolvedValue({
@@ -177,6 +227,7 @@ describe('AiClientService', () => {
 
   it('posts analysis transcription JSON with the presigned audio URL and context', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
@@ -243,7 +294,61 @@ describe('AiClientService', () => {
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
       '"audioUrl":"https://bucket.example/recording.m4a?X-Amz-Signature=secret"',
     );
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120000);
+    setTimeoutSpy.mockRestore();
     expect(result?.segments[0]?.confidence).toBe(0.93);
+  });
+
+  it('assembles persona instructions through the stateless AI contract', async () => {
+    consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        instructions: '조립된 페르소나 프롬프트',
+        subjectName: '신금자',
+      }),
+    } as unknown as Response);
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    await expect(
+      service.assemblePersona(
+        {
+          subjectContext: {
+            subject: { addressTerm: '외할머니', name: '신금자' },
+            familyMembers: [],
+            glossaryTerms: ['정읍'],
+          },
+          intakeContext: {
+            basicProfile: { status: '사망' },
+            speechStyle: '짧고 담담한 단문',
+            personality: '다정함',
+            familyMap: [],
+            situationalReactions: [],
+            tabooTopics: [],
+            memoryCards: [],
+            sttHints: { names: ['신금자'] },
+          },
+          speechExamples: ['뭐든지 적당히 하는 게 제일 힘든데.'],
+        },
+        {
+          ownerUserId: 'user-id',
+          subjectId: 'subject-id',
+          feature: ConsentFeature.VOICE_PERSONA,
+        },
+      ),
+    ).resolves.toEqual({
+      instructions: '조립된 페르소나 프롬프트',
+      subjectName: '신금자',
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/persona/assembly',
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('preserves AI 422 reason codes for transcription retry mapping', async () => {

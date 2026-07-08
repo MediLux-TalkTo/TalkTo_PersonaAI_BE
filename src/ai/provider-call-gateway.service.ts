@@ -12,6 +12,8 @@ export type ProviderCallOperation =
   | 'llm_chat'
   | 'embedding'
   | 'memory_extract'
+  | 'persona_assembly'
+  | 'persona_response'
   | 'voice_synthesis'
   | 'stt';
 

@@ -8,6 +8,12 @@ export class UpdateRecordingDto {
   @MaxLength(500)
   memo?: string | null;
 
+  @ApiPropertyOptional({ example: '찬민', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  conversationPartnerName?: string | null;
+
   @ApiPropertyOptional({ example: 'childhood-food', nullable: true })
   @IsOptional()
   @IsString()

@@ -15,14 +15,12 @@ export type AiSubjectContext = {
 
 export type AiIntakeContext = {
   readonly basicProfile: Readonly<Record<string, unknown>>;
-  readonly familyMap: Readonly<Record<string, unknown>>;
-  readonly timeline: Readonly<Record<string, unknown>>;
-  readonly speechStyle: Readonly<Record<string, unknown>>;
-  readonly personality: Readonly<Record<string, unknown>>;
-  readonly sensoryMemories: Readonly<Record<string, unknown>>;
+  readonly speechStyle: string;
+  readonly personality: string;
+  readonly familyMap: readonly unknown[];
+  readonly situationalReactions: readonly unknown[];
+  readonly tabooTopics: readonly string[];
   readonly memoryCards: readonly unknown[];
-  readonly situationalReactions: Readonly<Record<string, unknown>>;
-  readonly tabooTopics: readonly unknown[];
   readonly sttHints: {
     readonly names: readonly string[];
     readonly voiceSampleRef?: {
@@ -44,6 +42,45 @@ export type AiAnalysisTranscriptionRequest = {
   readonly glossary: readonly string[];
   readonly subjectContext: AiSubjectContext;
   readonly intakeContext: AiIntakeContext | null;
+};
+
+export type AiPersonaResponseRequest = {
+  readonly message: string;
+  readonly history: readonly {
+    readonly role: 'user' | 'assistant';
+    readonly content: string;
+  }[];
+  readonly memories: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly content: string;
+    readonly tags?: readonly string[];
+  }[];
+  readonly persona: {
+    readonly subjectId: string;
+    readonly instructions: string;
+    readonly voiceId: string | null;
+  };
+};
+
+export type AiPersonaResponse = {
+  readonly content: string;
+  readonly retrievedMemoryIds?: readonly string[];
+  readonly retrieved_memory_ids?: readonly string[];
+  readonly provider?: string;
+  readonly model?: string;
+  readonly latency_ms?: number;
+};
+
+export type AiPersonaAssemblyRequest = {
+  readonly subjectContext: AiSubjectContext;
+  readonly intakeContext: AiIntakeContext;
+  readonly speechExamples: readonly string[];
+};
+
+export type AiPersonaAssemblyResponse = {
+  readonly instructions: string;
+  readonly subjectName?: string;
 };
 
 export type AiAnalysisTranscriptionSegment = {
