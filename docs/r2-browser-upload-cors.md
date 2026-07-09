@@ -14,8 +14,6 @@ Policy -> Add CORS policy -> JSON:
 [
   {
     "AllowedOrigins": [
-      "http://localhost:3000",
-      "http://localhost:5173",
       "http://localhost:8080",
       "https://YOUR_APP_DOMAIN"
     ],
@@ -28,8 +26,16 @@ Policy -> Add CORS policy -> JSON:
 ```
 
 Replace `https://YOUR_APP_DOMAIN` with the real production app origin. Origins
-must match the browser `Origin` exactly, including the port. If Flutter Web uses
-a different local port, either run it with a fixed port or add that exact origin.
+must match the browser `Origin` exactly, including the port.
+
+The current `TalkTo_PersonaAI_FE` repository does not pin a Flutter Web port.
+Use a fixed local port when testing browser uploads:
+
+```bash
+flutter run -d chrome --web-port 8080
+```
+
+If Flutter Web runs on a different local port, add that exact origin instead.
 
 `OPTIONS` is the browser preflight. R2 answers it from the CORS rule when the
 actual method (`PUT` for uploads) and request headers are allowed.
@@ -44,8 +50,6 @@ Wrangler uses a different JSON shape:
     {
       "allowed": {
         "origins": [
-          "http://localhost:3000",
-          "http://localhost:5173",
           "http://localhost:8080",
           "https://YOUR_APP_DOMAIN"
         ],
