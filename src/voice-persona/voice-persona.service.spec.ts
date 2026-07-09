@@ -75,6 +75,7 @@ describe('VoicePersonaService', () => {
     subjectsService.getOwned.mockResolvedValue(buildSubject());
     transcriptSegmentsRepository.find.mockResolvedValue([buildTranscriptSegment()]);
     samplesRepository.findOne.mockResolvedValue(null);
+    samplesRepository.find.mockResolvedValue([]);
     recordingsRepository.findOne.mockResolvedValue(
       Object.assign(new Recording(), {
         id: 'recording-id',
@@ -264,6 +265,18 @@ describe('VoicePersonaService', () => {
         code: 'voice_sample_range_invalid',
       }),
     });
+
+    await expect(
+      service.createTargetVoiceSample('application-id', 'user-id', {
+        recordingId: '3b1cae30-77ef-4556-bbb1-4c3cb048e713',
+        startMs: 25000,
+        endMs: 25000,
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'voice_sample_range_invalid',
+      }),
+    });
   });
 
   it('reviews documents and writes sanitized admin audit metadata', async () => {
@@ -294,13 +307,32 @@ describe('VoicePersonaService', () => {
     );
   });
 
-  it('clones and stores a provider voice asset when a target voice sample is approved', async () => {
-    samplesRepository.findOne.mockResolvedValue({
+  it('clones and stores a provider voice asset with approved sample ranges', async () => {
+    const approvedSample = {
       id: 'sample-id',
       applicationId: 'application-id',
       subjectId: 'subject-id',
       recordingId: 'recording-id',
       storageKey: null,
+      startMs: 12000,
+      endMs: 25000,
+      reviewStatus: VoicePersonaReviewStatus.APPROVED,
+    };
+    samplesRepository.find.mockResolvedValue([
+      approvedSample,
+      {
+        id: 'sample-id-2',
+        applicationId: 'application-id',
+        subjectId: 'subject-id',
+        recordingId: 'recording-id',
+        storageKey: null,
+        startMs: 30000,
+        endMs: 41000,
+        reviewStatus: VoicePersonaReviewStatus.APPROVED,
+      },
+    ]);
+    samplesRepository.findOne.mockResolvedValue({
+      ...approvedSample,
       reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
     });
     applicationsRepository.findOne.mockResolvedValue(buildApplication());
@@ -314,7 +346,18 @@ describe('VoicePersonaService', () => {
     expect(aiClientService.cloneVoice).toHaveBeenCalledWith(
       {
         name: '외할머니 신금자',
-        sampleAudioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+        samples: [
+          {
+            audioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+            startMs: 12000,
+            endMs: 25000,
+          },
+          {
+            audioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+            startMs: 30000,
+            endMs: 41000,
+          },
+        ],
       },
       {
         ownerUserId: 'user-id',

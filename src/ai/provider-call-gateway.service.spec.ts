@@ -86,4 +86,36 @@ describe('ProviderCallGatewayService', () => {
       }),
     ).toThrow(ProviderCallBlockedException);
   });
+
+  it('allows voice clone sample audio URLs while keeping signed URLs blocked elsewhere', () => {
+    const gateway = new ProviderCallGatewayService(new DeterministicRedactor());
+
+    expect(() =>
+      gateway.prepareJsonPayload({
+        operation: 'voice_clone',
+        redactionRequired: false,
+        payload: {
+          name: '외할머니 신금자',
+          samples: [
+            {
+              audioUrl:
+                'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+              startMs: 5000,
+              endMs: 13000,
+            },
+          ],
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      gateway.prepareJsonPayload({
+        operation: 'persona_response',
+        redactionRequired: true,
+        payload: {
+          audioUrl:
+            'https://bucket.example/recording.m4a?X-Amz-Signature=secret',
+        },
+      }),
+    ).toThrow(ProviderCallBlockedException);
+  });
 });

@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
+import type { AiVoiceCloneSample } from '../ai/ai-analysis-transcription.types';
 import { TranscriptSegment } from '../analysis/transcript-segment.entity';
 import {
   buildGlossaryTerms,
@@ -309,10 +310,10 @@ export class VoicePersonaService {
         message: 'Both startMs and endMs are required when selecting a voice sample range.',
       });
     }
-    if (dto.startMs !== undefined && dto.endMs !== undefined && dto.endMs < dto.startMs) {
+    if (dto.startMs !== undefined && dto.endMs !== undefined && dto.endMs <= dto.startMs) {
       throw new BadRequestException({
         code: 'voice_sample_range_invalid',
-        message: 'Voice sample endMs must be greater than or equal to startMs.',
+        message: 'Voice sample endMs must be greater than startMs.',
       });
     }
   }
@@ -397,11 +398,8 @@ export class VoicePersonaService {
     sample: TargetVoiceSample,
     actorUserId: string,
   ): Promise<void> {
-    const sampleAudioUrl = await this.targetVoiceSampleUrl(
-      sample,
-      application.ownerUserId,
-    );
-    if (!sampleAudioUrl) {
+    const samples = await this.targetVoiceCloneSamples(application, sample);
+    if (samples.length === 0) {
       return;
     }
     const subject = await this.subjectsService.getOwned(
@@ -411,7 +409,7 @@ export class VoicePersonaService {
     const clone = await this.aiClientService.cloneVoice(
       {
         name: `${subject.relationship ?? '대상자'} ${subject.displayName}`,
-        sampleAudioUrl,
+        samples,
       },
       {
         ownerUserId: application.ownerUserId,
@@ -436,16 +434,55 @@ export class VoicePersonaService {
     );
   }
 
-  private async targetVoiceSampleUrl(
+  private async targetVoiceCloneSamples(
+    application: VoicePersonaApplication,
+    fallbackSample: TargetVoiceSample,
+  ): Promise<AiVoiceCloneSample[]> {
+    const approvedSamples = await this.samplesRepository.find({
+      where: {
+        applicationId: application.id,
+        reviewStatus: VoicePersonaReviewStatus.APPROVED,
+      },
+      order: { createdAt: 'ASC' },
+      take: 100,
+    });
+    const candidates = approvedSamples.some(
+      (candidate) => candidate.id === fallbackSample.id,
+    )
+      ? approvedSamples
+      : [fallbackSample, ...approvedSamples].slice(0, 100);
+
+    const samples: AiVoiceCloneSample[] = [];
+    for (const candidate of candidates) {
+      const cloneSample = await this.targetVoiceCloneSample(
+        candidate,
+        application.ownerUserId,
+      );
+      if (cloneSample) {
+        samples.push(cloneSample);
+      }
+    }
+    return samples;
+  }
+
+  private async targetVoiceCloneSample(
     sample: TargetVoiceSample,
     ownerUserId: string,
-  ): Promise<string | null> {
+  ): Promise<AiVoiceCloneSample | null> {
     const storageKey = await this.targetVoiceSampleStorageKey(sample, ownerUserId);
     if (!storageKey) {
       return null;
     }
-    return (await this.audioStorageService.createPlaybackUrl(storageKey, 1800))
+    const audioUrl = (await this.audioStorageService.createPlaybackUrl(storageKey, 1800))
       .playbackUrl;
+    if (sample.startMs === null || sample.endMs === null) {
+      return { audioUrl };
+    }
+    return {
+      audioUrl,
+      startMs: sample.startMs,
+      endMs: sample.endMs,
+    };
   }
 
   private async targetVoiceSampleStorageKey(

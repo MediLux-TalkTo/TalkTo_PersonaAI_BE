@@ -569,4 +569,59 @@ describe('AiClientService', () => {
       'subject-id',
     );
   });
+
+  it('posts multi-segment voice clone samples to the v1 endpoint', async () => {
+    consentsService.assertRequiredConsents.mockResolvedValue(undefined);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        voiceId: 'voice-id',
+        provider: 'elevenlabs',
+      }),
+    } as unknown as Response);
+    global.fetch = fetchMock;
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    await expect(
+      service.cloneVoice(
+        {
+          name: '외할머니 신금자',
+          samples: [
+            {
+              audioUrl:
+                'https://bucket.example/recording-1.m4a?X-Amz-Signature=test',
+              startMs: 5000,
+              endMs: 13000,
+            },
+            {
+              audioUrl:
+                'https://bucket.example/recording-2.m4a?X-Amz-Signature=test',
+              startMs: 40000,
+              endMs: 52000,
+            },
+          ],
+        },
+        {
+          ownerUserId: 'user-id',
+          subjectId: 'subject-id',
+        },
+      ),
+    ).resolves.toEqual({ voiceId: 'voice-id', provider: 'elevenlabs' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/voice/clone',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    const requestBody = String(fetchMock.mock.calls[0]?.[1]?.body);
+    expect(requestBody).toContain('"samples"');
+    expect(requestBody).toContain('"audioUrl"');
+    expect(requestBody).not.toContain('"sampleAudioUrl"');
+  });
 });

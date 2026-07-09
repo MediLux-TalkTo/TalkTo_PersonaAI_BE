@@ -187,7 +187,10 @@ function isAllowedSttAudioUrl(
   if (operation === 'stt') {
     return key === 'audioUrl' || key === 'referenceVoiceSampleUrl';
   }
-  return operation === 'voice_clone' && key === 'sampleAudioUrl';
+  return (
+    operation === 'voice_clone' &&
+    (key === 'sampleAudioUrl' || key === 'audioUrl')
+  );
 }
 
 function providerDataClassForKey(key: string): string {

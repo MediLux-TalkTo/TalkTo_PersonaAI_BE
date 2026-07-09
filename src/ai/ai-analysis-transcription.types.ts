@@ -185,10 +185,18 @@ export type AiReflectionResponse = {
   readonly model?: string;
 };
 
+export type AiVoiceCloneSample = {
+  readonly audioUrl: string;
+  readonly startMs?: number;
+  readonly endMs?: number;
+};
+
 export type AiVoiceCloneRequest = {
   readonly name: string;
-  readonly sampleAudioUrl: string;
-};
+} & (
+  | { readonly samples: readonly AiVoiceCloneSample[]; readonly sampleAudioUrl?: never }
+  | { readonly sampleAudioUrl: string; readonly samples?: never }
+);
 
 export type AiVoiceCloneResponse = {
   readonly voiceId: string;
