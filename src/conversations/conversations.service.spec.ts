@@ -201,4 +201,101 @@ describe('ConversationsService AI consent context', () => {
       }),
     );
   });
+
+  it('returns a non-fallback assistant response for voice messages when AI succeeds', async () => {
+    const manager = {
+      create: jest.fn((entity: unknown, value: unknown) => value),
+      save: jest.fn(async (value: { id?: string; senderType?: string; messageId?: string }) => ({
+        ...value,
+        id:
+          value.id ??
+          (value.senderType
+            ? `${value.senderType.toLowerCase()}-message-id`
+            : 'voice-artifact-id'),
+      })),
+    };
+    const dataSource = {
+      transaction: jest.fn((handler) => handler(manager)),
+    };
+    const personasService = {
+      getActivePersona: jest.fn().mockResolvedValue({
+        id: 'persona-id',
+        displayName: '할머니',
+        description: '조립된 페르소나 프롬프트',
+        voiceId: 'voice-id',
+      }),
+    };
+    const chatRuntimeService = {
+      generateAssistantReply: jest.fn().mockResolvedValue({
+        content: '그래, 아가. 여기서 잘 들려요.',
+        retrievedMemoryIds: [],
+        latencyMs: 10,
+        usedFallback: false,
+      }),
+    };
+    const aiClientService = {
+      extractMemoryCandidates: jest.fn().mockResolvedValue(null),
+      synthesizeSpeech: jest.fn().mockResolvedValue(Buffer.from('mp3')),
+      transcribe: jest.fn().mockResolvedValue(' 음성으로 보낸 질문 '),
+    };
+    const audioStorageService = {
+      saveMp3: jest.fn().mockResolvedValue({
+        storageKey: 'tts/voice-message.mp3',
+        url: '/audio/tts/voice-message.mp3',
+      }),
+    };
+    const service = new ConversationsService(
+      dataSource as unknown as DataSource,
+      personasService as unknown as PersonasService,
+      chatRuntimeService as unknown as ChatRuntimeService,
+      aiClientService as unknown as AiClientService,
+      { create: jest.fn() } as unknown as MemoriesService,
+      { retrieve: jest.fn().mockResolvedValue([]) } as unknown as MemoryRetrievalService,
+      audioStorageService as unknown as AudioStorageService,
+      { recordLog: jest.fn() } as unknown as AdminService,
+      {
+        findOne: jest.fn().mockResolvedValue({
+          id: 'conversation-id',
+          userId: ownerUserId,
+          lastMessageAt: null,
+        }),
+      } as unknown as Repository<Conversation>,
+      { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<Message>,
+      {} as Repository<MessageMemoryRef>,
+      {} as Repository<VoiceArtifact>,
+    );
+
+    await expect(
+      service.sendVoiceMessage(
+        'conversation-id',
+        { userId: ownerUserId, role: Role.FAMILY },
+        {},
+        {
+          buffer: Buffer.from('audio'),
+          mimetype: 'audio/wav',
+          originalname: 'voice.wav',
+        } as Express.Multer.File,
+      ),
+    ).resolves.toMatchObject({
+      userMessage: {
+        content: '음성으로 보낸 질문',
+        sttText: '음성으로 보낸 질문',
+      },
+      assistantMessage: {
+        content: '그래, 아가. 여기서 잘 들려요.',
+        ttsAudioUrl: '/audio/tts/voice-message.mp3',
+        fallbackTextUsed: false,
+      },
+    });
+    expect(chatRuntimeService.generateAssistantReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: '음성으로 보낸 질문',
+      }),
+    );
+    expect(aiClientService.synthesizeSpeech).toHaveBeenCalledWith(
+      '그래, 아가. 여기서 잘 들려요.',
+      { voiceId: 'voice-id' },
+      voicePersonaConsentContext,
+    );
+  });
 });
