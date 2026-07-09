@@ -159,6 +159,7 @@ export class ConversationsService {
         conversationId,
         messageId: savedAssistantMessage.id,
         text: assistantReply.content,
+        voiceId: persona.voiceId,
         consentContext: voicePersonaConsentContext,
       });
       const voiceArtifact = manager.create(VoiceArtifact, {
@@ -274,6 +275,7 @@ export class ConversationsService {
           conversationId,
           messageId: savedAssistantMessage.id,
           text: assistantReply.content,
+          voiceId: persona.voiceId,
           consentContext: voicePersonaConsentContext,
         });
         const voiceArtifact = manager.create(VoiceArtifact, {
@@ -341,6 +343,7 @@ export class ConversationsService {
     conversationId: string;
     messageId: string;
     text: string;
+    voiceId: string | null;
     consentContext: AiProviderConsentContext;
   }): Promise<{
     ttsAudioUrl: string | null;
@@ -350,6 +353,7 @@ export class ConversationsService {
     try {
       const audioBuffer = await this.aiClientService.synthesizeSpeech(
         params.text,
+        { voiceId: params.voiceId },
         params.consentContext,
       );
 
@@ -511,34 +515,42 @@ export class ConversationsService {
     consentContext: AiProviderConsentContext;
   }): Promise<void> {
     try {
-      const extraction = await this.aiClientService.extractMemory(
+      const extraction = await this.aiClientService.extractMemoryCandidates(
         {
           history: params.history,
-          user_message: params.userMessage,
-          assistant_message: params.assistantMessage,
+          userMessage: params.userMessage,
+          assistantMessage: params.assistantMessage,
         },
         params.consentContext,
       );
 
-      if (!extraction?.saved || !extraction.summary) {
+      const candidates = extraction?.candidates ?? [];
+      const storeableCandidates = candidates.filter(
+        (candidate) => candidate.shouldStore && candidate.summary.trim(),
+      );
+      if (storeableCandidates.length === 0) {
         return;
       }
 
-      await this.memoriesService.create(params.userId, {
-        title: extraction.summary.slice(0, 120),
-        memoryType: extraction.memory_type ?? 'SHORT_TERM',
-        relatedPeople: [],
-        relatedPeriod: undefined,
-        bodyMarkdown: extraction.summary,
-        tags: [
-          ...(extraction.category ? [`category:${extraction.category}`] : []),
-          'source:ai_memory_extract',
-        ],
-        confidenceScore:
-          typeof extraction.importance === 'number'
-            ? Math.max(0, Math.min(1, extraction.importance / 10))
-            : 0.7,
-      });
+      for (const candidate of storeableCandidates) {
+        await this.memoriesService.create(params.userId, {
+          title: candidate.summary.slice(0, 120),
+          memoryType: 'SHORT_TERM',
+          relatedPeople: [],
+          relatedPeriod: undefined,
+          bodyMarkdown: candidate.summary,
+          tags: [
+            ...(candidate.category ? [`category:${candidate.category}`] : []),
+            'source:ai_memory_extract',
+          ],
+          confidenceScore:
+            typeof candidate.confidence === 'number'
+              ? Math.max(0, Math.min(1, candidate.confidence))
+              : typeof candidate.importance === 'number'
+                ? Math.max(0, Math.min(1, candidate.importance / 10))
+                : 0.7,
+        });
+      }
     } catch (error) {
       await this.adminService.recordLog({
         category: SystemLogCategory.MEMORY,

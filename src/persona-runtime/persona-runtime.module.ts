@@ -8,6 +8,7 @@ import { EventsModule } from '../events/events.module';
 import { StorageModule } from '../storage/storage.module';
 import { Subject } from '../subjects/subject.entity';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
+import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
 import { PersonaRuntimeController } from './persona-runtime.controller';
 import { PersonaRuntimeMessage } from './persona-runtime-message.entity';
 import { PersonaRuntimeService } from './persona-runtime.service';
@@ -19,6 +20,7 @@ import { PersonaRuntimeSession } from './persona-runtime-session.entity';
       PersonaRuntimeSession,
       PersonaRuntimeMessage,
       PersonaRuntimeConfig,
+      VoiceProviderAsset,
       MemorySegment,
       AnalysisEmbedding,
       Subject,

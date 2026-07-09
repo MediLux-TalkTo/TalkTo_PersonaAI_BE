@@ -24,7 +24,7 @@ describe('AiClientService', () => {
     await expect(service.embed('hello')).resolves.toBeNull();
   });
 
-  it('maps /ai/chat response using snake_case fields', async () => {
+  it('posts persona response requests to the v1 endpoint', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -62,6 +62,11 @@ describe('AiClientService', () => {
             tags: ['sensitive'],
           },
         ],
+        persona: {
+          subjectId: 'subject-id',
+          instructions: '대상자 페르소나 프롬프트',
+          voiceId: 'voice-id',
+        },
       },
       {
         ownerUserId: 'user-id',
@@ -75,7 +80,7 @@ describe('AiClientService', () => {
       'subject-id',
     );
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/ai/chat',
+      'http://localhost:8000/v1/persona/responses',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -169,6 +174,11 @@ describe('AiClientService', () => {
             content: 'kim@example.com',
           },
         ],
+        persona: {
+          subjectId: 'subject-id',
+          instructions: '대상자 페르소나 프롬프트',
+          voiceId: null,
+        },
       },
       {
         ownerUserId: 'user-id',
@@ -185,16 +195,19 @@ describe('AiClientService', () => {
     expect(requestBody).not.toContain('900101-1234567');
   });
 
-  it('maps /ai/memory/extract response without persisting locally', async () => {
+  it('maps v1 memory candidate responses without persisting locally', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        saved: true,
-        importance: 7,
-        memory_type: 'SHORT_TERM',
-        category: '가족',
-        summary: '손녀가 다음 달에 이사 간다는 사실',
+        candidates: [
+          {
+            shouldStore: true,
+            importance: 7,
+            category: '가족',
+            summary: '손녀가 다음 달에 이사 간다는 사실',
+          },
+        ],
       }),
     } as unknown as Response);
 
@@ -204,11 +217,11 @@ describe('AiClientService', () => {
       ),
     } as unknown as ConfigService, consentsService);
 
-    const result = await service.extractMemory(
+    const result = await service.extractMemoryCandidates(
       {
         history: [],
-        user_message: '나 다음 달에 이사해',
-        assistant_message: '어디로 가는데?',
+        userMessage: '나 다음 달에 이사해',
+        assistantMessage: '어디로 가는데?',
       },
       {
         ownerUserId: 'user-id',
@@ -217,12 +230,12 @@ describe('AiClientService', () => {
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/ai/memory/extract',
+      'http://localhost:8000/v1/persona/memory-candidates',
       expect.objectContaining({
         method: 'POST',
       }),
     );
-    expect(result?.memory_type).toBe('SHORT_TERM');
+    expect(result?.candidates[0]?.summary).toBe('손녀가 다음 달에 이사 간다는 사실');
   });
 
   it('posts analysis transcription JSON with the presigned audio URL and context', async () => {
@@ -438,12 +451,12 @@ describe('AiClientService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('allows explicit legacy chat bypass without checking purpose consent', async () => {
+  it('allows explicit persona chat bypass without checking purpose consent', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
         content: '기존 채팅 답변',
-        retrieved_memory_ids: [],
+        retrievedMemoryIds: [],
       }),
     } as unknown as Response);
 
@@ -455,7 +468,16 @@ describe('AiClientService', () => {
 
     await expect(
       service.chat(
-        { message: '엄마 사랑해', history: [], memories: [] },
+        {
+          message: '엄마 사랑해',
+          history: [],
+          memories: [],
+          persona: {
+            subjectId: 'subject-id',
+            instructions: '대상자 페르소나 프롬프트',
+            voiceId: null,
+          },
+        },
         {
           ownerUserId: 'anonymous-session-id',
           feature: ConsentFeature.MEMORIES,
@@ -466,7 +488,7 @@ describe('AiClientService', () => {
 
     expect(consentsService.assertRequiredConsents).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:8000/ai/chat',
+      'http://localhost:8000/v1/persona/responses',
       expect.objectContaining({ method: 'POST' }),
     );
   });
@@ -497,7 +519,7 @@ describe('AiClientService', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('throws when /ai/embed response is missing embedding', async () => {
+  it('throws when v1 embedding response is missing embedding', async () => {
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
@@ -534,6 +556,8 @@ describe('AiClientService', () => {
 
     await expect(
       service.synthesizeSpeech('안녕', {
+        voiceId: 'voice-id',
+      }, {
         ownerUserId: 'user-id',
         subjectId: 'subject-id',
       }),

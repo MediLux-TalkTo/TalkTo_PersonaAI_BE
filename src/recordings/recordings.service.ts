@@ -50,7 +50,7 @@ type RecordingStats = {
   readonly total_recording_seconds: number;
   readonly status_badge: string;
   readonly memories_cta: string;
-  readonly summary: null;
+  readonly summary: string | null;
   readonly summary_status: string;
 };
 
@@ -590,6 +590,7 @@ export class RecordingsService {
       updated_at: recording.updatedAt,
       deleted_at: recording.deletedAt,
       ...stats,
+      summary: recording.summary ?? stats.summary,
     };
   }
 
@@ -607,8 +608,10 @@ export class RecordingsService {
         ? RecordingArchiveStatus.DELETION_REQUESTED
         : 'ready',
       memories_cta: RecordingMemoriesCta.LOCKED_UNTIL_MEMORIES,
-      summary: null,
-      summary_status: RecordingSummaryStatus.LOCKED_UNTIL_MEMORIES,
+      summary: recordings.find((recording) => recording.summary)?.summary ?? null,
+      summary_status: recordings.some((recording) => recording.summary)
+        ? 'ready'
+        : RecordingSummaryStatus.LOCKED_UNTIL_MEMORIES,
     };
   }
 

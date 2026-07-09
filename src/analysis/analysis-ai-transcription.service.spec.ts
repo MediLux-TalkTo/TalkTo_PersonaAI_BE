@@ -2,6 +2,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Test } from '@nestjs/testing';
 import { AiClientService } from '../ai/ai-client.service';
 import { AiServerHttpError } from '../ai/ai-server-http.error';
+import { ConsentFeature } from '../common/enums/consent.enums';
 import { Recording } from '../recordings/recording.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { FamilyGlossaryTerm } from '../subjects/family-glossary-term.entity';
@@ -13,19 +14,39 @@ import { AnalysisAiTranscriptionService } from './analysis-ai-transcription.serv
 import { AnalysisJobStatus } from './analysis-job.constants';
 import { AnalysisJob } from './analysis-job.entity';
 import { AnalysisWorkerTransitionsService } from './analysis-worker-transitions.service';
+import { MemorySegment } from './memory-segment.entity';
+import { TranscriptSegment } from './transcript-segment.entity';
+import { PersonaReflection } from '../voice-persona/persona-reflection.entity';
 
 describe('AnalysisAiTranscriptionService', () => {
   const jobsRepository = { findOne: jest.fn() };
-  const recordingsRepository = { findOne: jest.fn() };
-  const subjectsRepository = { findOne: jest.fn() };
+  const recordingsRepository = { findOne: jest.fn(), save: jest.fn() };
+  const subjectsRepository = { findOne: jest.fn(), save: jest.fn() };
   const applicationsRepository = { findOne: jest.fn() };
   const intakesRepository = { findOne: jest.fn() };
   const samplesRepository = { findOne: jest.fn() };
+  const transcriptSegmentsRepository = { find: jest.fn() };
+  const memorySegmentsRepository = { find: jest.fn() };
+  const reflectionsRepository = {
+    create: jest.fn(),
+    delete: jest.fn(),
+    save: jest.fn(),
+  };
   const audioStorageService = { createPlaybackUrl: jest.fn() };
-  const aiClientService = { requestAnalysisTranscription: jest.fn() };
+  const aiClientService = {
+    requestAnalysisTranscription: jest.fn(),
+    requestRecordingAnalysis: jest.fn(),
+    requestEmbeddings: jest.fn(),
+    reflectPersona: jest.fn(),
+    assemblePersona: jest.fn(),
+  };
   const workerTransitionsService = {
     markPreprocessing: jest.fn(),
     markStt: jest.fn(),
+    markRedaction: jest.fn(),
+    markSegmenting: jest.fn(),
+    markIndexing: jest.fn(),
+    markCompleted: jest.fn(),
     markFailed: jest.fn(),
   };
   let service: AnalysisAiTranscriptionService;
@@ -47,6 +68,70 @@ describe('AnalysisAiTranscriptionService', () => {
     workerTransitionsService.markFailed.mockResolvedValue(
       buildJob({ status: AnalysisJobStatus.FAILED_RETRYABLE }),
     );
+    workerTransitionsService.markRedaction.mockResolvedValue(
+      buildJob({ status: AnalysisJobStatus.REDACTION_PENDING }),
+    );
+    workerTransitionsService.markSegmenting.mockResolvedValue(
+      buildJob({ status: AnalysisJobStatus.SEGMENTING }),
+    );
+    workerTransitionsService.markIndexing.mockResolvedValue(
+      buildJob({ status: AnalysisJobStatus.INDEXING }),
+    );
+    workerTransitionsService.markCompleted.mockResolvedValue(
+      buildJob({ status: AnalysisJobStatus.COMPLETED }),
+    );
+    recordingsRepository.save.mockImplementation(async (value) => value);
+    subjectsRepository.save.mockImplementation(async (value) => value);
+    transcriptSegmentsRepository.find.mockResolvedValue([
+      buildTranscriptSegment(),
+    ]);
+    memorySegmentsRepository.find.mockResolvedValue([buildMemorySegment()]);
+    reflectionsRepository.create.mockImplementation((value) => value);
+    reflectionsRepository.delete.mockResolvedValue({ affected: 1 });
+    reflectionsRepository.save.mockImplementation(async (value) => value);
+    aiClientService.requestRecordingAnalysis.mockResolvedValue({
+      memorySegments: [
+        {
+          segmentIndex: 0,
+          sourceTranscriptSegmentIds: ['transcript-segment-id'],
+          startMs: 0,
+          endMs: 1200,
+          speakerLabel: 'SPK_0',
+          memoryText: '정읍 이야기를 했다.',
+          confidence: 'confirmed',
+          importanceScore: 7,
+          tags: ['고향'],
+          relatedPeople: ['신금자'],
+          sensitivityFlags: [],
+        },
+      ],
+      summary: '정읍 이야기를 했다.',
+      tags: ['고향'],
+    });
+    aiClientService.requestEmbeddings.mockResolvedValue({
+      embeddings: [
+        {
+          memorySegmentId: 'memory-segment-id',
+          embedding: [0.1, 0.2],
+        },
+      ],
+      provider: 'openai',
+      model: 'text-embedding-3-small',
+    });
+    aiClientService.reflectPersona.mockResolvedValue({
+      reflections: [
+        {
+          insight: '고향 이야기를 소중히 여긴다.',
+          category: '가치관',
+          evidenceMemoryIds: ['memory-segment-id', 'memory-segment-2'],
+          importance: 8,
+        },
+      ],
+    });
+    aiClientService.assemblePersona.mockResolvedValue({
+      instructions: '통찰 반영 페르소나 프롬프트',
+      subjectName: '신금자',
+    });
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -60,6 +145,12 @@ describe('AnalysisAiTranscriptionService', () => {
         },
         { provide: getRepositoryToken(PersonaIntake), useValue: intakesRepository },
         { provide: getRepositoryToken(TargetVoiceSample), useValue: samplesRepository },
+        {
+          provide: getRepositoryToken(TranscriptSegment),
+          useValue: transcriptSegmentsRepository,
+        },
+        { provide: getRepositoryToken(MemorySegment), useValue: memorySegmentsRepository },
+        { provide: getRepositoryToken(PersonaReflection), useValue: reflectionsRepository },
         { provide: AudioStorageService, useValue: audioStorageService },
         { provide: AiClientService, useValue: aiClientService },
         {
@@ -74,7 +165,7 @@ describe('AnalysisAiTranscriptionService', () => {
 
   it('builds the TalkTo_APP_AI transcription payload from recording, subject, glossary, and intake context', async () => {
     audioStorageService.createPlaybackUrl.mockResolvedValue({
-      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=secret',
+      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=test-signature',
       expiresAt: new Date(),
       ttlSeconds: 1800,
       downloadAllowed: false,
@@ -89,7 +180,7 @@ describe('AnalysisAiTranscriptionService', () => {
     expect(request).toMatchObject({
       jobId: 'job-id',
       recordingId: 'recording-id',
-      audioUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=secret',
+      audioUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=test-signature',
       audioMimeType: 'audio/m4a',
       mode: 'preview',
       language: 'ko',
@@ -164,7 +255,7 @@ describe('AnalysisAiTranscriptionService', () => {
       });
 
     await expect(
-      service.requestAndPersistTranscription('job-id', 'full'),
+      service.requestAndPersistTranscription('job-id', 'preview'),
     ).resolves.toMatchObject({ status: AnalysisJobStatus.STT_PROCESSING });
 
     expect(aiClientService.requestAnalysisTranscription).toHaveBeenCalledTimes(2);
@@ -172,6 +263,7 @@ describe('AnalysisAiTranscriptionService', () => {
       workerId: 'backend-ai-transcription',
     });
     expect(workerTransitionsService.markStt).toHaveBeenCalledWith('job-id', {
+      subjectSpeakerLabel: null,
       segments: [
         {
           segmentIndex: 0,
@@ -187,9 +279,73 @@ describe('AnalysisAiTranscriptionService', () => {
     });
   });
 
+  it('runs full recording analysis, embeddings, reflection, and persona assembly after STT', async () => {
+    audioStorageService.createPlaybackUrl.mockResolvedValue({
+      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=test-signature',
+      expiresAt: new Date(),
+      ttlSeconds: 1800,
+      downloadAllowed: false,
+    });
+    aiClientService.requestAnalysisTranscription.mockResolvedValue({
+      provider: 'talkto-app-ai',
+      model: 'stt-v1',
+      subjectSpeakerLabel: 'SPK_0',
+      segments: [
+        {
+          segmentIndex: 0,
+          startMs: 0,
+          endMs: 1200,
+          speakerLabel: 'SPK_0',
+          transcriptText: '정읍 이야기',
+          confidence: 0.93,
+        },
+      ],
+    });
+
+    await expect(
+      service.requestAndPersistTranscription('job-id', 'full'),
+    ).resolves.toMatchObject({ status: AnalysisJobStatus.COMPLETED });
+
+    expect(workerTransitionsService.markStt).toHaveBeenCalledWith(
+      'job-id',
+      expect.objectContaining({ subjectSpeakerLabel: 'SPK_0' }),
+    );
+    expect(aiClientService.requestRecordingAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationPartnerName: '지영',
+        subjectSpeakerLabel: 'SPK_0',
+      }),
+      expect.objectContaining({ feature: ConsentFeature.MEMORIES }),
+    );
+    expect(workerTransitionsService.markSegmenting).toHaveBeenCalledWith(
+      'job-id',
+      expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            memoryText: '정읍 이야기를 했다.',
+            importanceScore: 7,
+            tags: ['고향'],
+          }),
+        ],
+      }),
+    );
+    expect(workerTransitionsService.markIndexing).toHaveBeenCalledWith(
+      'job-id',
+      expect.objectContaining({
+        embeddings: [expect.objectContaining({ memorySegmentId: 'memory-segment-id' })],
+      }),
+    );
+    expect(aiClientService.assemblePersona).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personaInsights: ['고향 이야기를 소중히 여긴다.'],
+      }),
+      expect.objectContaining({ feature: ConsentFeature.VOICE_PERSONA }),
+    );
+  });
+
   it('maps AI empty transcript failures to the PRV-003 quality guidance code path', async () => {
     audioStorageService.createPlaybackUrl.mockResolvedValue({
-      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=secret',
+      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=test-signature',
       expiresAt: new Date(),
       ttlSeconds: 1800,
       downloadAllowed: false,
@@ -229,6 +385,7 @@ function buildRecording(): Recording {
     subjectId: 'subject-id',
     storageKey: 'recordings/user-id/subject-id/recording-id.m4a',
     mimeType: 'audio/m4a',
+    conversationPartnerName: '지영',
   });
 }
 
@@ -247,6 +404,38 @@ function buildSubject(): Subject {
       Object.assign(new FamilyGlossaryTerm(), { term: '매실청' }),
       Object.assign(new FamilyGlossaryTerm(), { term: '정읍' }),
     ],
+  });
+}
+
+function buildTranscriptSegment(): TranscriptSegment {
+  return Object.assign(new TranscriptSegment(), {
+    id: 'transcript-segment-id',
+    jobId: 'job-id',
+    ownerUserId: 'user-id',
+    subjectId: 'subject-id',
+    recordingId: 'recording-id',
+    segmentIndex: 0,
+    startMs: 0,
+    endMs: 1200,
+    speakerLabel: 'SPK_0',
+    transcriptText: '정읍 이야기',
+    correctedText: null,
+  });
+}
+
+function buildMemorySegment(): MemorySegment {
+  return Object.assign(new MemorySegment(), {
+    id: 'memory-segment-id',
+    jobId: 'job-id',
+    ownerUserId: 'user-id',
+    subjectId: 'subject-id',
+    recordingId: 'recording-id',
+    segmentIndex: 0,
+    startMs: 0,
+    endMs: 1200,
+    memoryText: '정읍 이야기를 했다.',
+    tags: ['고향'],
+    importanceScore: 7,
   });
 }
 

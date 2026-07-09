@@ -13,10 +13,18 @@ import {
 import type {
   AiAnalysisTranscriptionRequest,
   AiAnalysisTranscriptionResponse,
+  AiEmbeddingRequest,
+  AiEmbeddingResponse,
   AiPersonaAssemblyRequest,
   AiPersonaAssemblyResponse,
   AiPersonaResponse,
   AiPersonaResponseRequest,
+  AiRecordingAnalysisRequest,
+  AiRecordingAnalysisResponse,
+  AiReflectionRequest,
+  AiReflectionResponse,
+  AiVoiceCloneRequest,
+  AiVoiceCloneResponse,
 } from './ai-analysis-transcription.types';
 import { AiServerHttpError } from './ai-server-http.error';
 
@@ -50,17 +58,22 @@ export interface AiChatResponse {
 
 export interface AiMemoryExtractRequest {
   history: AiChatHistoryItem[];
-  user_message: string;
-  assistant_message: string;
+  userMessage: string;
+  assistantMessage: string;
 }
 
-export interface AiMemoryExtractResponse {
-  saved: boolean;
-  importance?: number;
-  memory_type?: string;
+export interface AiMemoryCandidate {
+  summary: string;
   category?: string;
-  summary?: string;
-  reason?: string;
+  importance?: number;
+  confidence?: number;
+  shouldStore: boolean;
+}
+
+export interface AiMemoryCandidatesResponse {
+  candidates: AiMemoryCandidate[];
+  provider?: string;
+  model?: string;
 }
 
 export interface AiProviderConsentContext {
@@ -75,6 +88,11 @@ type RequiredConsentAsserter = Pick<ConsentsService, 'assertRequiredConsents'>;
 interface AiEmbedResponse {
   embedding?: number[];
 }
+
+type TtsRequestOptions = {
+  readonly voiceId?: string | null;
+  readonly speed?: number;
+};
 
 @Injectable()
 export class AiClientService {
@@ -101,13 +119,9 @@ export class AiClientService {
     }
     await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    const path = request.persona ? '/v1/persona/responses' : '/ai/chat';
-    const operation: ProviderCallOperation = request.persona
-      ? 'persona_response'
-      : 'llm_chat';
     const response = await this.postJson<AiPersonaResponse>(
-      path,
-      this.prepareProviderPayload(operation, request, true),
+      '/v1/persona/responses',
+      this.prepareProviderPayload('persona_response', request, true),
     );
 
     if (!response.content || typeof response.content !== 'string') {
@@ -131,29 +145,52 @@ export class AiClientService {
     }
     await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    const response = await this.postJson<AiEmbedResponse>(
-      '/ai/embed',
-      this.prepareProviderPayload('embedding', { text }, true),
+    const response = await this.postJson<AiEmbedResponse | AiEmbeddingResponse>(
+      '/v1/embeddings',
+      this.prepareProviderPayload(
+        'embedding',
+        {
+          jobId: 'query',
+          items: [{ memorySegmentId: 'query', embeddingIndex: 0, text }],
+        },
+        true,
+      ),
     );
 
-    if (!Array.isArray(response.embedding)) {
+    const embedding = this.firstEmbedding(response);
+    if (!embedding) {
       throw new Error('AI embed response is missing embedding.');
     }
 
-    return response.embedding;
+    return embedding;
   }
 
-  async extractMemory(
-    request: AiMemoryExtractRequest,
+  async requestEmbeddings(
+    request: AiEmbeddingRequest,
     consentContext?: AiProviderConsentContext,
-  ): Promise<AiMemoryExtractResponse | null> {
+  ): Promise<AiEmbeddingResponse | null> {
     if (!this.isConfigured()) {
       return null;
     }
     await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
-    return this.postJson<AiMemoryExtractResponse>(
-      '/ai/memory/extract',
+    return this.postJson<AiEmbeddingResponse>(
+      '/v1/embeddings',
+      this.prepareProviderPayload('embedding', request, true),
+    );
+  }
+
+  async extractMemoryCandidates(
+    request: AiMemoryExtractRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiMemoryCandidatesResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
+
+    return this.postJson<AiMemoryCandidatesResponse>(
+      '/v1/persona/memory-candidates',
       this.prepareProviderPayload('memory_extract', request, true),
     );
   }
@@ -180,6 +217,39 @@ export class AiClientService {
     return response;
   }
 
+  async requestRecordingAnalysis(
+    request: AiRecordingAnalysisRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiRecordingAnalysisResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
+
+    return this.postJson<AiRecordingAnalysisResponse>(
+      '/v1/analysis/recording',
+      this.prepareProviderPayload('recording_analysis', request, true),
+    );
+  }
+
+  async reflectPersona(
+    request: AiReflectionRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiReflectionResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(
+      consentContext,
+      ConsentFeature.VOICE_PERSONA,
+    );
+
+    return this.postJson<AiReflectionResponse>(
+      '/v1/persona/reflection',
+      this.prepareProviderPayload('persona_reflection', request, true),
+    );
+  }
+
   async transcribe(
     file: Express.Multer.File,
     consentContext?: AiProviderConsentContext,
@@ -200,7 +270,7 @@ export class AiClientService {
     formData.append('audio_file', blob, file.originalname);
 
     const response = await this.postForm<{ stt_text?: string; text?: string }>(
-      '/ai/stt',
+      '/v1/voice/transcriptions',
       formData,
     );
     const sttText = response.stt_text ?? response.text;
@@ -214,6 +284,7 @@ export class AiClientService {
 
   async synthesizeSpeech(
     text: string,
+    options?: TtsRequestOptions,
     consentContext?: AiProviderConsentContext,
   ): Promise<Buffer | null> {
     if (!this.isConfigured()) {
@@ -225,8 +296,16 @@ export class AiClientService {
     );
 
     const response = await this.postRaw(
-      '/ai/tts',
-      this.prepareProviderPayload('voice_synthesis', { text }, true),
+      '/v1/voice/speech',
+      this.prepareProviderPayload(
+        'voice_synthesis',
+        {
+          text,
+          ...(options?.voiceId ? { voiceId: options.voiceId } : {}),
+          ...(options?.speed !== undefined ? { speed: options.speed } : {}),
+        },
+        true,
+      ),
     );
     const contentType = response.headers.get('content-type') ?? '';
 
@@ -235,6 +314,28 @@ export class AiClientService {
     }
 
     return Buffer.from(await response.arrayBuffer());
+  }
+
+  async cloneVoice(
+    request: AiVoiceCloneRequest,
+    consentContext?: AiProviderConsentContext,
+  ): Promise<AiVoiceCloneResponse | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    await this.assertProviderConsents(
+      consentContext,
+      ConsentFeature.VOICE_PERSONA,
+    );
+
+    const response = await this.postJson<AiVoiceCloneResponse>(
+      '/v1/voice/clone',
+      this.prepareProviderPayload('voice_clone', request, false),
+    );
+    if (!response.voiceId || typeof response.voiceId !== 'string') {
+      throw new Error('AI voice clone response is missing voiceId.');
+    }
+    return response;
   }
 
   async assemblePersona(
@@ -431,5 +532,16 @@ export class AiClientService {
       return [...response.retrieved_memory_ids];
     }
     return [];
+  }
+
+  private firstEmbedding(response: AiEmbedResponse | AiEmbeddingResponse): number[] | null {
+    if ('embedding' in response && Array.isArray(response.embedding)) {
+      return response.embedding;
+    }
+    if (!('embeddings' in response)) {
+      return null;
+    }
+    const first = response.embeddings[0];
+    return first ? [...first.embedding] : null;
   }
 }

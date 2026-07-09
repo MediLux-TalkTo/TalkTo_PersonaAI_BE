@@ -16,6 +16,9 @@ describe('PersonaRuntimeService', () => {
   const subjectsRepository = {
     createQueryBuilder: jest.fn(),
   };
+  const providerAssetsRepository = {
+    findOne: jest.fn(),
+  };
   const consentsService = {
     assertRequiredConsents: jest.fn(),
   };
@@ -60,6 +63,12 @@ describe('PersonaRuntimeService', () => {
         assembledPersonaInstructions: '조립된 페르소나 프롬프트',
       }),
     });
+    providerAssetsRepository.findOne.mockResolvedValue({
+      id: 'asset-id',
+      externalAssetId: 'voice-id',
+      ownerUserId: 'user-id',
+      subjectId: 'subject-id',
+    });
     aiClientService.embed.mockResolvedValue([1, 0]);
     aiClientService.chat.mockResolvedValue({ content: 'Persona answer.' });
     aiClientService.synthesizeSpeech.mockResolvedValue(Buffer.from('mp3'));
@@ -75,6 +84,7 @@ describe('PersonaRuntimeService', () => {
       memorySegmentsRepository as never,
       embeddingsRepository as never,
       subjectsRepository as never,
+      providerAssetsRepository as never,
       consentsService as never,
       aiClientService as never,
       audioStorageService as never,
@@ -123,7 +133,7 @@ describe('PersonaRuntimeService', () => {
         persona: {
           subjectId: 'subject-id',
           instructions: '조립된 페르소나 프롬프트',
-          voiceId: null,
+          voiceId: 'voice-id',
         },
       }),
       expect.objectContaining({ feature: 'voice_persona' }),
@@ -133,6 +143,11 @@ describe('PersonaRuntimeService', () => {
       expect.objectContaining({ feature: 'voice_persona' }),
     );
     expect(memorySegmentsRepository.find).not.toHaveBeenCalled();
+    expect(aiClientService.synthesizeSpeech).toHaveBeenCalledWith(
+      'Persona answer.',
+      { voiceId: 'voice-id' },
+      expect.objectContaining({ feature: 'voice_persona' }),
+    );
   });
 
   it('returns safe block response for blocked topics without calling the provider', async () => {
@@ -169,6 +184,7 @@ function buildRuntimeConfig(): PersonaRuntimeConfig {
   config.applicationId = 'application-id';
   config.ownerUserId = 'user-id';
   config.subjectId = 'subject-id';
+  config.providerAssetId = 'asset-id';
   config.enabled = true;
   return config;
 }

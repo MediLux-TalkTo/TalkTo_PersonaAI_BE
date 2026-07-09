@@ -35,6 +35,7 @@ export type AiAnalysisTranscriptionRequest = {
   readonly jobId: string;
   readonly recordingId: string;
   readonly audioUrl: string;
+  readonly referenceVoiceSampleUrl?: string;
   readonly audioMimeType?: string;
   readonly mode: AiAnalysisTranscriptionMode;
   readonly language: string;
@@ -76,6 +77,7 @@ export type AiPersonaAssemblyRequest = {
   readonly subjectContext: AiSubjectContext;
   readonly intakeContext: AiIntakeContext;
   readonly speechExamples: readonly string[];
+  readonly personaInsights?: readonly string[];
 };
 
 export type AiPersonaAssemblyResponse = {
@@ -97,6 +99,98 @@ export type AiAnalysisTranscriptionSegment = {
 
 export type AiAnalysisTranscriptionResponse = {
   readonly segments: readonly AiAnalysisTranscriptionSegment[];
+  readonly subjectSpeakerLabel?: string | null;
   readonly provider?: string;
   readonly model?: string;
+};
+
+export type AiEmbeddingRequest = {
+  readonly jobId: string;
+  readonly items: readonly {
+    readonly memorySegmentId: string;
+    readonly embeddingIndex: number;
+    readonly text: string;
+  }[];
+};
+
+export type AiEmbeddingResponse = {
+  readonly embeddings: readonly {
+    readonly memorySegmentId: string;
+    readonly embedding: readonly number[];
+  }[];
+  readonly provider?: string;
+  readonly model?: string;
+};
+
+export type AiRecordingAnalysisRequest = {
+  readonly jobId: string;
+  readonly recordingId: string;
+  readonly transcriptSegments: readonly {
+    readonly id: string;
+    readonly segmentIndex: number;
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly speakerLabel: string;
+    readonly transcriptText: string;
+  }[];
+  readonly subjectContext: AiSubjectContext;
+  readonly subjectSpeakerLabel?: string | null;
+  readonly conversationPartnerName?: string | null;
+};
+
+export type AiRecordingAnalysisResponse = {
+  readonly memorySegments: readonly {
+    readonly segmentIndex: number;
+    readonly sourceTranscriptSegmentIds: readonly string[];
+    readonly startMs: number;
+    readonly endMs: number;
+    readonly speakerLabel?: string;
+    readonly memoryText: string;
+    readonly confidence?: 'confirmed' | 'inferred';
+    readonly importanceScore?: number;
+    readonly tags?: readonly string[];
+    readonly relatedPeople?: readonly string[];
+    readonly sensitivityFlags?: readonly string[];
+  }[];
+  readonly summary?: string;
+  readonly tags?: readonly string[];
+  readonly speechStyle?: unknown;
+  readonly safetyFlags?: readonly {
+    readonly type: string;
+    readonly description: string;
+    readonly sourceTranscriptSegmentIds?: readonly string[];
+  }[];
+  readonly provider?: string;
+  readonly model?: string;
+};
+
+export type AiReflectionRequest = {
+  readonly subjectContext: AiSubjectContext;
+  readonly memories: readonly {
+    readonly id: string;
+    readonly memoryText: string;
+    readonly tags: readonly string[];
+    readonly importanceScore: number;
+  }[];
+};
+
+export type AiReflectionResponse = {
+  readonly reflections: readonly {
+    readonly insight: string;
+    readonly category: string;
+    readonly evidenceMemoryIds: readonly string[];
+    readonly importance: number;
+  }[];
+  readonly provider?: string;
+  readonly model?: string;
+};
+
+export type AiVoiceCloneRequest = {
+  readonly name: string;
+  readonly sampleAudioUrl: string;
+};
+
+export type AiVoiceCloneResponse = {
+  readonly voiceId: string;
+  readonly provider?: string;
 };

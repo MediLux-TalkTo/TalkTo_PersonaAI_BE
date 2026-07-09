@@ -29,7 +29,7 @@ describe('ConversationsService AI consent context', () => {
 
   const createService = () => {
     const aiClientService = {
-      extractMemory: jest.fn().mockResolvedValue(null),
+      extractMemoryCandidates: jest.fn().mockResolvedValue(null),
       synthesizeSpeech: jest.fn().mockResolvedValue(null),
       transcribe: jest.fn().mockResolvedValue(' 변환된 음성 '),
     };
@@ -85,11 +85,13 @@ describe('ConversationsService AI consent context', () => {
       conversationId: 'conversation-id',
       messageId: 'message-id',
       text: 'kim@example.com',
+      voiceId: 'voice-id',
       consentContext: voicePersonaConsentContext,
     });
 
     expect(aiClientService.synthesizeSpeech).toHaveBeenCalledWith(
       'kim@example.com',
+      { voiceId: 'voice-id' },
       voicePersonaConsentContext,
     );
   });
@@ -106,11 +108,11 @@ describe('ConversationsService AI consent context', () => {
       consentContext: memoriesConsentContext,
     });
 
-    expect(aiClientService.extractMemory).toHaveBeenCalledWith(
+    expect(aiClientService.extractMemoryCandidates).toHaveBeenCalledWith(
       {
         history: [],
-        user_message: '오늘 kim@example.com에게 전화했어',
-        assistant_message: '기억해둘게요.',
+        userMessage: '오늘 kim@example.com에게 전화했어',
+        assistantMessage: '기억해둘게요.',
       },
       memoriesConsentContext,
     );
@@ -148,7 +150,7 @@ describe('ConversationsService AI consent context', () => {
       }),
     };
     const aiClientService = {
-      extractMemory: jest.fn().mockResolvedValue(null),
+      extractMemoryCandidates: jest.fn().mockResolvedValue(null),
       synthesizeSpeech: jest.fn().mockResolvedValue(Buffer.from('mp3')),
     };
     const audioStorageService = {

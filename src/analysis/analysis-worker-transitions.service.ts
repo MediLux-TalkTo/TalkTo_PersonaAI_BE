@@ -61,6 +61,7 @@ export class AnalysisWorkerTransitionsService {
       ]);
     }
     this.refreshLease(job);
+    job.subjectSpeakerLabel = dto.subjectSpeakerLabel ?? job.subjectSpeakerLabel ?? null;
     await this.transcriptSegmentsRepository.upsert(
       dto.segments.map((segment) => ({
         jobId: job.id,
@@ -101,24 +102,31 @@ export class AnalysisWorkerTransitionsService {
     const { job, recording } = await this.loadJobWithRecording(jobId);
     this.transitionThrough(job, [AnalysisJobStatus.SEGMENTING]);
     this.refreshLease(job);
-    await this.memorySegmentsRepository.upsert(
-      dto.segments.map((segment) => ({
-        jobId: job.id,
-        ownerUserId: job.ownerUserId,
-        subjectId: job.subjectId,
-        recordingId: job.recordingId,
-        segmentIndex: segment.segmentIndex,
-        sourceTranscriptSegmentIds: segment.sourceTranscriptSegmentIds,
-        startMs: segment.startMs,
-        endMs: segment.endMs,
-        speakerLabel: segment.speakerLabel ?? UNKNOWN_SPEAKER_LABEL,
-        memoryText: segment.memoryText,
-      })),
-      {
-        conflictPaths: ['jobId', 'segmentIndex'],
-        skipUpdateIfNoValuesChanged: true,
-      },
-    );
+    if (dto.segments.length > 0) {
+      await this.memorySegmentsRepository.upsert(
+        dto.segments.map((segment) => ({
+          jobId: job.id,
+          ownerUserId: job.ownerUserId,
+          subjectId: job.subjectId,
+          recordingId: job.recordingId,
+          segmentIndex: segment.segmentIndex,
+          sourceTranscriptSegmentIds: segment.sourceTranscriptSegmentIds,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          speakerLabel: segment.speakerLabel ?? UNKNOWN_SPEAKER_LABEL,
+          memoryText: segment.memoryText,
+          confidence: segment.confidence ?? 'confirmed',
+          importanceScore: segment.importanceScore ?? null,
+          tags: segment.tags ?? [],
+          relatedPeople: segment.relatedPeople ?? [],
+          sensitivityFlags: segment.sensitivityFlags ?? [],
+        })),
+        {
+          conflictPaths: ['jobId', 'segmentIndex'],
+          skipUpdateIfNoValuesChanged: true,
+        },
+      );
+    }
     return this.saveJobAndProgress(job, recording);
   }
 
@@ -127,24 +135,26 @@ export class AnalysisWorkerTransitionsService {
     const { job, recording } = await this.loadJobWithRecording(jobId);
     this.transitionThrough(job, [AnalysisJobStatus.INDEXING]);
     this.refreshLease(job);
-    await this.embeddingsRepository.upsert(
-      dto.embeddings.map((embedding) => ({
-        jobId: job.id,
-        ownerUserId: job.ownerUserId,
-        subjectId: job.subjectId,
-        recordingId: job.recordingId,
-        memorySegmentId: embedding.memorySegmentId,
-        embeddingIndex: embedding.embeddingIndex,
-        provider: embedding.provider,
-        model: embedding.model,
-        dimensions: embedding.dimensions,
-        embedding: embedding.embedding,
-      })),
-      {
-        conflictPaths: ['jobId', 'embeddingIndex'],
-        skipUpdateIfNoValuesChanged: true,
-      },
-    );
+    if (dto.embeddings.length > 0) {
+      await this.embeddingsRepository.upsert(
+        dto.embeddings.map((embedding) => ({
+          jobId: job.id,
+          ownerUserId: job.ownerUserId,
+          subjectId: job.subjectId,
+          recordingId: job.recordingId,
+          memorySegmentId: embedding.memorySegmentId,
+          embeddingIndex: embedding.embeddingIndex,
+          provider: embedding.provider,
+          model: embedding.model,
+          dimensions: embedding.dimensions,
+          embedding: embedding.embedding,
+        })),
+        {
+          conflictPaths: ['jobId', 'embeddingIndex'],
+          skipUpdateIfNoValuesChanged: true,
+        },
+      );
+    }
     return this.saveJobAndProgress(job, recording);
   }
 

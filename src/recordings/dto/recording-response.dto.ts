@@ -85,12 +85,11 @@ export class RecordingDto {
   memories_cta: string;
 
   @ApiProperty({
-    type: 'object',
-    additionalProperties: true,
+    type: 'string',
     example: null,
     nullable: true,
   })
-  summary: null;
+  summary: string | null;
 
   @ApiProperty({ example: RecordingSummaryStatus.LOCKED_UNTIL_MEMORIES })
   summary_status: string;
@@ -250,12 +249,11 @@ export class RecordingArchiveListDto {
   memories_cta: string;
 
   @ApiProperty({
-    type: 'object',
-    additionalProperties: true,
+    type: 'string',
     example: null,
     nullable: true,
   })
-  summary: null;
+  summary: string | null;
 
   @ApiProperty({ example: RecordingSummaryStatus.LOCKED_UNTIL_MEMORIES })
   summary_status: string;

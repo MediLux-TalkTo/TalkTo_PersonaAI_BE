@@ -12,6 +12,7 @@ import { StorageModule } from '../storage/storage.module';
 import { FamilyGlossaryTerm } from '../subjects/family-glossary-term.entity';
 import { Subject } from '../subjects/subject.entity';
 import { PersonaIntake } from '../voice-persona/persona-intake.entity';
+import { PersonaReflection } from '../voice-persona/persona-reflection.entity';
 import { TargetVoiceSample } from '../voice-persona/target-voice-sample.entity';
 import { VoicePersonaApplication } from '../voice-persona/voice-persona-application.entity';
 import { AnalysisAiTranscriptionService } from './analysis-ai-transcription.service';
@@ -41,6 +42,7 @@ import { TranscriptSegment } from './transcript-segment.entity';
       FamilyGlossaryTerm,
       VoicePersonaApplication,
       PersonaIntake,
+      PersonaReflection,
       TargetVoiceSample,
     ]),
     AiModule,

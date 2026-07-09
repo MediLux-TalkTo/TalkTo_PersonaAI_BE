@@ -79,6 +79,12 @@ export class MarkSttDto {
   @ValidateNested({ each: true })
   @Type(() => TranscriptSegmentInputDto)
   segments: TranscriptSegmentInputDto[];
+
+  @ApiPropertyOptional({ example: 'SPK_0', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  subjectSpeakerLabel?: string | null;
 }
 
 export class RequestAiTranscriptionDto {
@@ -120,6 +126,37 @@ export class MemorySegmentInputDto {
   @IsString()
   @MaxLength(20000)
   memoryText: string;
+
+  @ApiPropertyOptional({ example: 'confirmed' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  confidence?: string;
+
+  @ApiPropertyOptional({ example: 7, minimum: 1, maximum: 10 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  importanceScore?: number;
+
+  @ApiPropertyOptional({ example: ['음식요리'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
+  @ApiPropertyOptional({ example: ['지영'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  relatedPeople?: string[];
+
+  @ApiPropertyOptional({ example: ['health'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sensitivityFlags?: string[];
 }
 
 export class MarkSegmentingDto {

@@ -20,6 +20,8 @@ import { AppEventsService } from '../events/events.service';
 import { Entitlement } from '../payments/entitlement.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
 import { ProductFeature } from '../products/product.constants';
+import { Recording } from '../recordings/recording.entity';
+import { AudioStorageService } from '../storage/audio-storage.service';
 import { Subject } from '../subjects/subject.entity';
 import { SubjectsService } from '../subjects/subjects.service';
 import {
@@ -84,8 +86,11 @@ export class VoicePersonaService {
     private readonly subjectsRepository: Repository<Subject>,
     @InjectRepository(TranscriptSegment)
     private readonly transcriptSegmentsRepository: Repository<TranscriptSegment>,
+    @InjectRepository(Recording)
+    private readonly recordingsRepository: Repository<Recording>,
     private readonly subjectsService: SubjectsService,
     private readonly aiClientService: AiClientService,
+    private readonly audioStorageService: AudioStorageService,
     private readonly consentsService: ConsentsService,
     private readonly appEventsService: AppEventsService,
     private readonly auditService: AuditService,
@@ -374,6 +379,9 @@ export class VoicePersonaService {
     if (application) {
       application.voiceSampleStatus = dto.status;
       await this.applicationsRepository.save(application);
+      if (dto.status === VoicePersonaReviewStatus.APPROVED) {
+        await this.cloneApprovedVoiceSample(application, savedSample, actorUserId);
+      }
     }
     await this.auditVoicePersonaAdminAction(actorUserId, 'target_voice_sample_review', {
       applicationId: sample.applicationId,
@@ -382,6 +390,78 @@ export class VoicePersonaService {
       status: dto.status,
     });
     return savedSample;
+  }
+
+  private async cloneApprovedVoiceSample(
+    application: VoicePersonaApplication,
+    sample: TargetVoiceSample,
+    actorUserId: string,
+  ): Promise<void> {
+    const sampleAudioUrl = await this.targetVoiceSampleUrl(
+      sample,
+      application.ownerUserId,
+    );
+    if (!sampleAudioUrl) {
+      return;
+    }
+    const subject = await this.subjectsService.getOwned(
+      application.subjectId,
+      application.ownerUserId,
+    );
+    const clone = await this.aiClientService.cloneVoice(
+      {
+        name: `${subject.relationship ?? '대상자'} ${subject.displayName}`,
+        sampleAudioUrl,
+      },
+      {
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    if (!clone) {
+      return;
+    }
+    await this.providerAssetsRepository.save(
+      this.providerAssetsRepository.create({
+        applicationId: application.id,
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+        providerName: clone.provider ?? 'elevenlabs',
+        externalAssetId: clone.voiceId,
+        status: VoiceProviderAssetStatus.REGISTERED,
+        reviewerUserId: actorUserId,
+        notes: 'auto-cloned from approved target voice sample',
+      }),
+    );
+  }
+
+  private async targetVoiceSampleUrl(
+    sample: TargetVoiceSample,
+    ownerUserId: string,
+  ): Promise<string | null> {
+    const storageKey = await this.targetVoiceSampleStorageKey(sample, ownerUserId);
+    if (!storageKey) {
+      return null;
+    }
+    return (await this.audioStorageService.createPlaybackUrl(storageKey, 1800))
+      .playbackUrl;
+  }
+
+  private async targetVoiceSampleStorageKey(
+    sample: TargetVoiceSample,
+    ownerUserId: string,
+  ): Promise<string | null> {
+    if (sample.storageKey) {
+      return sample.storageKey;
+    }
+    if (!sample.recordingId) {
+      return null;
+    }
+    const recording = await this.recordingsRepository.findOne({
+      where: { id: sample.recordingId, ownerUserId },
+    });
+    return recording?.storageKey ?? null;
   }
 
   async updateBuildStatus(

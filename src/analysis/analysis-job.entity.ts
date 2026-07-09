@@ -76,6 +76,9 @@ export class AnalysisJob {
   @Column({ type: 'text', nullable: true })
   failureMessage: string | null;
 
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  subjectSpeakerLabel: string | null;
+
   @Column({ type: 'integer', default: 0 })
   retryCount: number;
 

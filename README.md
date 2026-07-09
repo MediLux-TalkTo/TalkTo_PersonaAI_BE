@@ -48,7 +48,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - global rate limiting
 - environment validation on bootstrap
 - guarded local seed bootstrap
-- optional AI server client for `/ai/chat`, `/ai/embed`, `/ai/memory/extract`, STT, and TTS
+- optional AI server client for `/v1/persona/*`, `/v1/embeddings`, `/v1/analysis/*`, and `/v1/voice/*`
 - TypeORM migration CLI scaffold
 - payment products, order checkout records, verified local payment webhooks, active entitlements, and queued paid Archive analysis jobs
 - admin worker transition endpoints for paid analysis preprocessing, STT transcript persistence, redaction gate, memory segment persistence, embedding persistence, completion, and failure

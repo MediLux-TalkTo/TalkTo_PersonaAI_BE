@@ -4,6 +4,7 @@ import { ConsentFeature } from '../common/enums/consent.enums';
 import { Entitlement } from '../payments/entitlement.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
 import { ProductFeature } from '../products/product.constants';
+import { Recording } from '../recordings/recording.entity';
 import { Subject } from '../subjects/subject.entity';
 import { VoicePersonaService } from './voice-persona.service';
 import { VoicePersonaApplication } from './voice-persona-application.entity';
@@ -25,6 +26,7 @@ describe('VoicePersonaService', () => {
   const runtimeConfigsRepository = repoMock();
   const subjectsRepository = repoMock();
   const transcriptSegmentsRepository = repoMock();
+  const recordingsRepository = repoMock();
   const entitlementsRepository = {
     find: jest.fn(),
   };
@@ -33,6 +35,10 @@ describe('VoicePersonaService', () => {
   };
   const aiClientService = {
     assemblePersona: jest.fn(),
+    cloneVoice: jest.fn(),
+  };
+  const audioStorageService = {
+    createPlaybackUrl: jest.fn(),
   };
   const consentsService = {
     assertRequiredConsents: jest.fn(),
@@ -59,6 +65,7 @@ describe('VoicePersonaService', () => {
       runtimeConfigsRepository,
       subjectsRepository,
       transcriptSegmentsRepository,
+      recordingsRepository,
     ]) {
       repository.create.mockImplementation((input) => input);
       repository.save.mockImplementation((input) =>
@@ -68,9 +75,26 @@ describe('VoicePersonaService', () => {
     subjectsService.getOwned.mockResolvedValue(buildSubject());
     transcriptSegmentsRepository.find.mockResolvedValue([buildTranscriptSegment()]);
     samplesRepository.findOne.mockResolvedValue(null);
+    recordingsRepository.findOne.mockResolvedValue(
+      Object.assign(new Recording(), {
+        id: 'recording-id',
+        ownerUserId: 'user-id',
+        storageKey: 'recordings/user-id/subject-id/sample.m4a',
+      }),
+    );
+    audioStorageService.createPlaybackUrl.mockResolvedValue({
+      playbackUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+      expiresAt: new Date(),
+      ttlSeconds: 1800,
+      downloadAllowed: false,
+    });
     aiClientService.assemblePersona.mockResolvedValue({
       instructions: '조립된 페르소나 프롬프트',
       subjectName: '신금자',
+    });
+    aiClientService.cloneVoice.mockResolvedValue({
+      voiceId: 'voice-id',
+      provider: 'elevenlabs',
     });
     consentsService.assertRequiredConsents.mockResolvedValue(undefined);
     entitlementsRepository.find.mockResolvedValue([buildEntitlement()]);
@@ -87,8 +111,10 @@ describe('VoicePersonaService', () => {
       entitlementsRepository as never,
       subjectsRepository as never,
       transcriptSegmentsRepository as never,
+      recordingsRepository as never,
       subjectsService as never,
       aiClientService as never,
+      audioStorageService as never,
       consentsService as never,
       appEventsService as never,
       auditService as never,
@@ -264,6 +290,43 @@ describe('VoicePersonaService', () => {
         action: 'voice_persona_document_review',
         resourceType: 'voice_persona',
         resourceId: 'application-id',
+      }),
+    );
+  });
+
+  it('clones and stores a provider voice asset when a target voice sample is approved', async () => {
+    samplesRepository.findOne.mockResolvedValue({
+      id: 'sample-id',
+      applicationId: 'application-id',
+      subjectId: 'subject-id',
+      recordingId: 'recording-id',
+      storageKey: null,
+      reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
+    });
+    applicationsRepository.findOne.mockResolvedValue(buildApplication());
+
+    await expect(
+      service.reviewVoiceSample('sample-id', 'admin-id', {
+        status: VoicePersonaReviewStatus.APPROVED,
+      }),
+    ).resolves.toMatchObject({ reviewStatus: VoicePersonaReviewStatus.APPROVED });
+
+    expect(aiClientService.cloneVoice).toHaveBeenCalledWith(
+      {
+        name: '외할머니 신금자',
+        sampleAudioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+      },
+      {
+        ownerUserId: 'user-id',
+        subjectId: 'subject-id',
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    expect(providerAssetsRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalAssetId: 'voice-id',
+        providerName: 'elevenlabs',
+        status: 'registered',
       }),
     );
   });

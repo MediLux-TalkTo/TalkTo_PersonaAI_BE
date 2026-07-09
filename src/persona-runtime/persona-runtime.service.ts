@@ -10,6 +10,7 @@ import { AppEventsService } from '../events/events.service';
 import { Subject } from '../subjects/subject.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
+import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
 import { CreatePersonaRuntimeMessageDto, CreatePersonaRuntimeSessionDto } from './dto/persona-runtime.dto';
 import { PersonaRuntimeMessage } from './persona-runtime-message.entity';
 import { PersonaRuntimeSession } from './persona-runtime-session.entity';
@@ -34,6 +35,8 @@ export class PersonaRuntimeService {
     private readonly embeddingsRepository: Repository<AnalysisEmbedding>,
     @InjectRepository(Subject)
     private readonly subjectsRepository: Repository<Subject>,
+    @InjectRepository(VoiceProviderAsset)
+    private readonly providerAssetsRepository: Repository<VoiceProviderAsset>,
     private readonly consentsService: ConsentsService,
     private readonly aiClientService: AiClientService,
     private readonly audioStorageService: AudioStorageService,
@@ -110,6 +113,7 @@ export class PersonaRuntimeService {
       assistantMessage,
       session.subjectId,
       ownerUserId,
+      await this.loadVoiceId(runtimeConfig),
     );
     if (audio) {
       assistantMessage.audioStorageKey = audio.audioStorageKey;
@@ -152,9 +156,10 @@ export class PersonaRuntimeService {
     ownerUserId: string,
     text: string,
   ): Promise<Partial<PersonaRuntimeMessage>> {
-    const [segments, subject] = await Promise.all([
+    const [segments, subject, voiceId] = await Promise.all([
       this.retrieveRuntimeMemories(session, ownerUserId, text),
       this.loadRuntimeSubject(runtimeConfig),
+      this.loadVoiceId(runtimeConfig),
     ]);
     const aiResponse = await this.aiClientService.chat(
       {
@@ -168,7 +173,7 @@ export class PersonaRuntimeService {
         persona: {
           subjectId: runtimeConfig.subjectId,
           instructions: this.personaInstructions(subject),
-          voiceId: null,
+          voiceId,
         },
       },
       {
@@ -196,12 +201,17 @@ export class PersonaRuntimeService {
     message: PersonaRuntimeMessage,
     subjectId: string,
     ownerUserId: string,
+    voiceId: string | null,
   ): Promise<{ audioStorageKey: string; audioPlaybackUrl: string } | null> {
-    const audioBuffer = await this.aiClientService.synthesizeSpeech(message.text, {
-      ownerUserId,
-      subjectId,
-      feature: ConsentFeature.VOICE_PERSONA,
-    });
+    const audioBuffer = await this.aiClientService.synthesizeSpeech(
+      message.text,
+      { voiceId },
+      {
+        ownerUserId,
+        subjectId,
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
     if (!audioBuffer) {
       return null;
     }
@@ -271,6 +281,22 @@ export class PersonaRuntimeService {
       subject?.assembledPersonaInstructions ??
       'Answer as the approved Voice Persona. Use only supplied memories for factual recall.'
     );
+  }
+
+  private async loadVoiceId(
+    runtimeConfig: PersonaRuntimeConfig,
+  ): Promise<string | null> {
+    if (!runtimeConfig.providerAssetId) {
+      return null;
+    }
+    const asset = await this.providerAssetsRepository.findOne({
+      where: {
+        id: runtimeConfig.providerAssetId,
+        ownerUserId: runtimeConfig.ownerUserId,
+        subjectId: runtimeConfig.subjectId,
+      },
+    });
+    return asset?.externalAssetId ?? null;
   }
 
   private async loadEnabledRuntimeConfig(

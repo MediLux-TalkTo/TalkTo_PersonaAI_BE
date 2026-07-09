@@ -6,6 +6,7 @@ import type {
   AiAnalysisTranscriptionRequest,
   AiAnalysisTranscriptionResponse,
   AiIntakeContext,
+  AiRecordingAnalysisResponse,
 } from '../ai/ai-analysis-transcription.types';
 import { AiClientService } from '../ai/ai-client.service';
 import { AiServerHttpError } from '../ai/ai-server-http.error';
@@ -14,6 +15,7 @@ import { Recording } from '../recordings/recording.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { Subject } from '../subjects/subject.entity';
 import { PersonaIntake } from '../voice-persona/persona-intake.entity';
+import { PersonaReflection } from '../voice-persona/persona-reflection.entity';
 import { TargetVoiceSample } from '../voice-persona/target-voice-sample.entity';
 import { VoicePersonaApplication } from '../voice-persona/voice-persona-application.entity';
 import {
@@ -28,6 +30,8 @@ import {
   buildSubjectContext,
   mapIntakeContext,
 } from './analysis-transcription-context';
+import { MemorySegment } from './memory-segment.entity';
+import { TranscriptSegment } from './transcript-segment.entity';
 
 const ANALYSIS_AUDIO_URL_MIN_TTL_SECONDS = 30 * 60;
 const DEFAULT_TRANSCRIPTION_LANGUAGE = 'ko';
@@ -56,6 +60,12 @@ export class AnalysisAiTranscriptionService {
     private readonly intakesRepository: Repository<PersonaIntake>,
     @InjectRepository(TargetVoiceSample)
     private readonly samplesRepository: Repository<TargetVoiceSample>,
+    @InjectRepository(TranscriptSegment)
+    private readonly transcriptSegmentsRepository: Repository<TranscriptSegment>,
+    @InjectRepository(MemorySegment)
+    private readonly memorySegmentsRepository: Repository<MemorySegment>,
+    @InjectRepository(PersonaReflection)
+    private readonly reflectionsRepository: Repository<PersonaReflection>,
     private readonly audioStorageService: AudioStorageService,
     private readonly aiClientService: AiClientService,
     private readonly workerTransitionsService: AnalysisWorkerTransitionsService,
@@ -97,7 +107,8 @@ export class AnalysisAiTranscriptionService {
 
     try {
       const response = await this.requestTranscription(jobId, mode);
-      return this.workerTransitionsService.markStt(jobId, {
+      const sttJob = await this.workerTransitionsService.markStt(jobId, {
+        subjectSpeakerLabel: response.subjectSpeakerLabel ?? null,
         segments: response.segments.map((segment, index) => ({
           segmentIndex: segment.segmentIndex ?? index,
           startMs: segment.startMs,
@@ -109,6 +120,14 @@ export class AnalysisAiTranscriptionService {
           confidence: segment.confidence,
         })),
       });
+      if (mode === 'preview') {
+        return sttJob;
+      }
+      await this.requestAndPersistRecordingAnalysis(
+        jobId,
+        response.subjectSpeakerLabel ?? sttJob.subjectSpeakerLabel ?? null,
+      );
+      return this.workerTransitionsService.markCompleted(jobId);
     } catch (error) {
       if (error instanceof AiServerHttpError) {
         return this.markAiFailure(jobId, error);
@@ -150,6 +169,7 @@ export class AnalysisAiTranscriptionService {
       context.recording.storageKey,
       ANALYSIS_AUDIO_URL_MIN_TTL_SECONDS,
     );
+    const referenceVoiceSampleUrl = await this.referenceVoiceSampleUrl(context.job);
 
     return {
       jobId: context.job.id,
@@ -162,7 +182,296 @@ export class AnalysisAiTranscriptionService {
       glossary: context.glossaryTerms,
       subjectContext: buildSubjectContext(context),
       intakeContext: context.intakeContext,
+      ...(referenceVoiceSampleUrl ? { referenceVoiceSampleUrl } : {}),
     };
+  }
+
+  private async requestAndPersistRecordingAnalysis(
+    jobId: string,
+    subjectSpeakerLabel: string | null,
+  ): Promise<void> {
+    const context = await this.loadContext(jobId);
+    const transcriptSegments = await this.transcriptSegmentsRepository.find({
+      where: { jobId },
+      order: { segmentIndex: 'ASC' },
+    });
+    if (transcriptSegments.length === 0) {
+      return;
+    }
+
+    const analysis = await this.aiClientService.requestRecordingAnalysis(
+      {
+        jobId,
+        recordingId: context.recording.id,
+        transcriptSegments: transcriptSegments.map((segment) => ({
+          id: segment.id,
+          segmentIndex: segment.segmentIndex,
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+          speakerLabel: segment.speakerLabel,
+          transcriptText: segment.correctedText ?? segment.transcriptText,
+        })),
+        subjectContext: buildSubjectContext(context),
+        subjectSpeakerLabel,
+        conversationPartnerName: context.recording.conversationPartnerName,
+      },
+      {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+        feature: ConsentFeature.MEMORIES,
+      },
+    );
+    if (!analysis) {
+      throw new ServiceUnavailableException({
+        code: 'ai_server_not_configured',
+        message: 'AI_SERVER_URL is required to run recording analysis.',
+      });
+    }
+
+    await this.persistRecordingAnalysis(context, analysis);
+    await this.embedMemorySegments(context);
+    await this.rebuildPersonaFromReflections(context);
+  }
+
+  private async persistRecordingAnalysis(
+    context: AnalysisTranscriptionContext,
+    analysis: AiRecordingAnalysisResponse,
+  ): Promise<void> {
+    context.recording.summary = analysis.summary ?? null;
+    context.recording.summaryTags = [...(analysis.tags ?? [])];
+    context.recording.speechStyle = analysis.speechStyle ?? null;
+    context.recording.safetyFlags = [...(analysis.safetyFlags ?? [])];
+    await this.recordingsRepository.save(context.recording);
+
+    await this.workerTransitionsService.markRedaction(context.job.id);
+    await this.workerTransitionsService.markSegmenting(context.job.id, {
+      segments: analysis.memorySegments.map((segment) => ({
+        segmentIndex: segment.segmentIndex,
+        sourceTranscriptSegmentIds: [...segment.sourceTranscriptSegmentIds],
+        startMs: segment.startMs,
+        endMs: segment.endMs,
+        speakerLabel: segment.speakerLabel,
+        memoryText: segment.memoryText,
+        confidence: segment.confidence,
+        importanceScore: segment.importanceScore,
+        tags: [...(segment.tags ?? [])],
+        relatedPeople: [...(segment.relatedPeople ?? [])],
+        sensitivityFlags: [...(segment.sensitivityFlags ?? [])],
+      })),
+    });
+  }
+
+  private async embedMemorySegments(
+    context: AnalysisTranscriptionContext,
+  ): Promise<void> {
+    const memorySegments = await this.memorySegmentsRepository.find({
+      where: { jobId: context.job.id },
+      order: { segmentIndex: 'ASC' },
+    });
+    if (memorySegments.length === 0) {
+      return;
+    }
+
+    const response = await this.aiClientService.requestEmbeddings(
+      {
+        jobId: context.job.id,
+        items: memorySegments.map((segment, index) => ({
+          memorySegmentId: segment.id,
+          embeddingIndex: index,
+          text: segment.memoryText,
+        })),
+      },
+      {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+        feature: ConsentFeature.MEMORIES,
+      },
+    );
+    if (!response) {
+      return;
+    }
+    const memoryById = new Map(memorySegments.map((segment) => [segment.id, segment]));
+    const embeddings = response.embeddings.flatMap((embedding, index) => {
+        const segment = memoryById.get(embedding.memorySegmentId);
+        if (!segment) {
+          return [];
+        }
+        return [
+          {
+            memorySegmentId: embedding.memorySegmentId,
+            embeddingIndex: index,
+            provider: response.provider ?? 'talkto-app-ai',
+            model: response.model ?? 'text-embedding-3-small',
+            dimensions: embedding.embedding.length,
+            embedding: [...embedding.embedding],
+          },
+        ];
+      });
+    if (embeddings.length === 0) {
+      return;
+    }
+    await this.workerTransitionsService.markIndexing(context.job.id, { embeddings });
+  }
+
+  private async rebuildPersonaFromReflections(
+    context: AnalysisTranscriptionContext,
+  ): Promise<void> {
+    const memorySegments = await this.memorySegmentsRepository.find({
+      where: { ownerUserId: context.job.ownerUserId, subjectId: context.job.subjectId },
+      order: { updatedAt: 'DESC' },
+      take: 200,
+    });
+    if (memorySegments.length === 0) {
+      return;
+    }
+    const reflection = await this.aiClientService.reflectPersona(
+      {
+        subjectContext: buildSubjectContext(context),
+        memories: memorySegments.map((segment) => ({
+          id: segment.id,
+          memoryText: segment.memoryText,
+          tags: segment.tags ?? [],
+          importanceScore: segment.importanceScore ?? 5,
+        })),
+      },
+      {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    if (!reflection) {
+      return;
+    }
+    await this.reflectionsRepository.delete({
+      ownerUserId: context.job.ownerUserId,
+      subjectId: context.job.subjectId,
+    });
+    const savedReflections = await this.reflectionsRepository.save(
+      reflection.reflections.map((item) =>
+        this.reflectionsRepository.create({
+          ownerUserId: context.job.ownerUserId,
+          subjectId: context.job.subjectId,
+          insight: item.insight,
+          category: item.category,
+          evidenceMemoryIds: [...item.evidenceMemoryIds],
+          importance: item.importance,
+        }),
+      ),
+    );
+    await this.assemblePersonaInstructions(context, savedReflections);
+  }
+
+  private async assemblePersonaInstructions(
+    context: AnalysisTranscriptionContext,
+    reflections: readonly PersonaReflection[],
+  ): Promise<void> {
+    const application = await this.applicationsRepository.findOne({
+      where: {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+        intakeStatus: 'submitted',
+      },
+      order: { submittedAt: 'DESC', createdAt: 'DESC' },
+    });
+    if (!application) {
+      return;
+    }
+    const intake = await this.intakesRepository.findOne({
+      where: { applicationId: application.id, status: 'submitted' },
+    });
+    if (!intake) {
+      return;
+    }
+    const sample = await this.samplesRepository.findOne({
+      where: { applicationId: application.id },
+      order: { createdAt: 'DESC' },
+    });
+    const assembly = await this.aiClientService.assemblePersona(
+      {
+        subjectContext: buildSubjectContext(context),
+        intakeContext: mapIntakeContext({
+          intake,
+          glossaryTerms: context.glossaryTerms,
+          subjectName: context.subject.displayName,
+          sample,
+        }),
+        speechExamples: await this.loadSpeechExamples(context),
+        personaInsights: reflections.map((reflection) => reflection.insight).slice(0, 50),
+      },
+      {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+        feature: ConsentFeature.VOICE_PERSONA,
+      },
+    );
+    if (!assembly) {
+      return;
+    }
+    context.subject.assembledPersonaInstructions = assembly.instructions;
+    await this.subjectsRepository.save(context.subject);
+  }
+
+  private async loadSpeechExamples(
+    context: AnalysisTranscriptionContext,
+  ): Promise<readonly string[]> {
+    const segments = await this.transcriptSegmentsRepository.find({
+      where: {
+        ownerUserId: context.job.ownerUserId,
+        subjectId: context.job.subjectId,
+      },
+      order: { updatedAt: 'DESC' },
+      take: 200,
+    });
+    return segments
+      .map((segment) => (segment.correctedText ?? segment.transcriptText).trim())
+      .filter((text) => text.length >= 6 && text.length <= 40)
+      .slice(0, 50);
+  }
+
+  private async referenceVoiceSampleUrl(
+    job: AnalysisJob,
+  ): Promise<string | null> {
+    const application = await this.applicationsRepository.findOne({
+      where: { ownerUserId: job.ownerUserId, subjectId: job.subjectId },
+      order: { submittedAt: 'DESC', createdAt: 'DESC' },
+    });
+    if (!application) {
+      return null;
+    }
+    const sample = await this.samplesRepository.findOne({
+      where: { applicationId: application.id },
+      order: { createdAt: 'DESC' },
+    });
+    if (!sample) {
+      return null;
+    }
+    const storageKey = await this.voiceSampleStorageKey(sample, job.ownerUserId);
+    if (!storageKey) {
+      return null;
+    }
+    return (
+      await this.audioStorageService.createPlaybackUrl(
+        storageKey,
+        ANALYSIS_AUDIO_URL_MIN_TTL_SECONDS,
+      )
+    ).playbackUrl;
+  }
+
+  private async voiceSampleStorageKey(
+    sample: TargetVoiceSample,
+    ownerUserId: string,
+  ): Promise<string | null> {
+    if (sample.storageKey) {
+      return sample.storageKey;
+    }
+    if (!sample.recordingId) {
+      return null;
+    }
+    const recording = await this.recordingsRepository.findOne({
+      where: { id: sample.recordingId, ownerUserId },
+    });
+    return recording?.storageKey ?? null;
   }
 
   private async loadContext(jobId: string): Promise<AnalysisTranscriptionContext> {

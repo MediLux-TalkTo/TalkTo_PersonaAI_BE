@@ -12,8 +12,11 @@ export type ProviderCallOperation =
   | 'llm_chat'
   | 'embedding'
   | 'memory_extract'
+  | 'recording_analysis'
+  | 'persona_reflection'
   | 'persona_assembly'
   | 'persona_response'
+  | 'voice_clone'
   | 'voice_synthesis'
   | 'stt';
 
@@ -181,7 +184,10 @@ function isAllowedSttAudioUrl(
   operation: ProviderCallOperation,
   key?: string,
 ): boolean {
-  return operation === 'stt' && key === 'audioUrl';
+  if (operation === 'stt') {
+    return key === 'audioUrl' || key === 'referenceVoiceSampleUrl';
+  }
+  return operation === 'voice_clone' && key === 'sampleAudioUrl';
 }
 
 function providerDataClassForKey(key: string): string {

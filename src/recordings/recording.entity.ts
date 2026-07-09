@@ -57,6 +57,18 @@ export class Recording {
   @Column({ type: 'text', nullable: true })
   memo: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  summary: string | null;
+
+  @Column({ type: 'text', array: true, default: '{}' })
+  summaryTags: string[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  speechStyle: unknown | null;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  safetyFlags: unknown[];
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   conversationPartnerName: string | null;
 

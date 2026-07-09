@@ -53,6 +53,21 @@ export class MemorySegment {
   @Column({ type: 'text' })
   memoryText: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'confirmed' })
+  confidence: string;
+
+  @Column({ type: 'integer', nullable: true })
+  importanceScore: number | null;
+
+  @Column({ type: 'text', array: true, default: '{}' })
+  tags: string[];
+
+  @Column({ type: 'text', array: true, default: '{}' })
+  relatedPeople: string[];
+
+  @Column({ type: 'text', array: true, default: '{}' })
+  sensitivityFlags: string[];
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
