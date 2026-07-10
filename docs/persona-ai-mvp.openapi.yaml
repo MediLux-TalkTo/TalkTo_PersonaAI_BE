@@ -16,7 +16,8 @@ info:
     admin worker transition endpoints for paid analysis jobs, and paid Memories
     status/search plus segment playback/feedback over indexed analysis segments,
     in-app analysis status notifications, and R&D redacted export opt-in/preview
-    guardrails, plus Voice Persona application core routes.
+    guardrails, public landing pre-registrations, plus Voice Persona application
+    core routes.
 
     Guardrails: free Archive upload/completion must not create Preview, STT,
     LLM summary, embedding, memory segment, or analysis job work. Preview/sample
@@ -32,6 +33,8 @@ servers:
     description: Local development
 tags:
   - name: Auth
+  - name: Pre-registrations
+    description: Public landing pre-registration intake and Admin/Ops follow-up for contact-bearing records.
   - name: Consent
     description: Purpose consent requirements and acceptance for Archive, paid Memories, and future Voice Persona gates.
   - name: Subjects
@@ -117,6 +120,107 @@ paths:
       responses:
         '200':
           description: Current user profile
+  /api/v1/pre-registrations:
+    post:
+      tags: [Pre-registrations]
+      security: []
+      summary: Submit a public landing pre-registration
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Optional UUID v4 reused only when retrying the same submission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreRegistrationRequest'
+      responses:
+        '201':
+          description: Pre-registration received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreRegistrationSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/admin/pre-registrations:
+    get:
+      tags: [Pre-registrations]
+      summary: List pre-registrations for Admin/Ops follow-up
+      parameters:
+        - in: query
+          name: participationType
+          schema:
+            type: string
+            enum: [early_access, survey_10, interview_20]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [received, contacted, interview_scheduled, closed]
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: Contact-bearing pre-registration records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPreRegistrationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/admin/pre-registrations/{registrationId}:
+    patch:
+      tags: [Pre-registrations]
+      summary: Update pre-registration follow-up state
+      parameters:
+        - in: path
+          name: registrationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreRegistrationRequest'
+      responses:
+        '200':
+          description: Pre-registration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPreRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/consents/me:
     get:
       tags: [Consent]
@@ -1721,6 +1825,215 @@ components:
             timestamp:
               type: string
               format: date-time
+    PreRegistrationRequest:
+      type: object
+      required: [participationType, name, contact, reason, contactConsent, contactConsentVersion]
+      properties:
+        participationType:
+          type: string
+          enum: [early_access, survey_10, interview_20]
+        name:
+          type: string
+          maxLength: 100
+        contact:
+          type: string
+          description: A valid email address or Korean mobile number.
+        reason:
+          type: string
+          enum: [preserve_voice_and_memories, preserve_family_records, voice_persona_interest, other]
+        reasonOther:
+          type: string
+          maxLength: 500
+          description: Required when reason is other.
+        contactConsent:
+          type: boolean
+          enum: [true]
+        contactConsentVersion:
+          type: string
+          maxLength: 80
+        survey:
+          type: object
+          description: Required only for participationType survey_10.
+          required: [hasRecording, interests, voicePersonaFeeling, concerns]
+          properties:
+            hasRecording:
+              type: string
+              enum: [has_recording, wants_to_collect]
+            interests:
+              type: array
+              minItems: 1
+              items:
+                type: string
+                enum: [archive_recordings, search_and_relisten, ai_summary, voice_persona]
+            voicePersonaFeeling:
+              type: string
+              enum: [eager, curious_cautious, original_voice_only, uncomfortable]
+            concerns:
+              type: array
+              minItems: 1
+              items:
+                type: string
+                enum: [privacy_storage, different_words, emotional_distress, price]
+            usageSituation:
+              type: string
+              maxLength: 500
+        interview:
+          type: object
+          description: Required only for participationType interview_20.
+          required: [preferredTimeSlots, preferredContactMethod, recordingDuration]
+          properties:
+            preferredTimeSlots:
+              type: array
+              minItems: 1
+              items:
+                type: string
+                enum: [weekday_daytime, weekday_evening, weekend_daytime, weekend_evening]
+            preferredContactMethod:
+              type: string
+              enum: [phone, kakao, email, video]
+            recordingDuration:
+              type: string
+              enum: [none, under_10_min, between_10_and_30_min, over_30_min]
+        utm:
+          type: object
+          additionalProperties: false
+          properties:
+            source:
+              type: string
+              maxLength: 120
+            medium:
+              type: string
+              maxLength: 120
+            campaign:
+              type: string
+              maxLength: 120
+    PreRegistrationSubmissionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            registrationId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [received, contacted, interview_scheduled, closed]
+            participationType:
+              type: string
+              enum: [early_access, survey_10, interview_20]
+            benefitStatus:
+              type: string
+              enum: [not_applicable, pending_confirmation, confirmed, declined]
+            nextStep:
+              type: string
+              enum: [wait_for_contact]
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+    UpdatePreRegistrationRequest:
+      type: object
+      minProperties: 1
+      properties:
+        status:
+          type: string
+          enum: [received, contacted, interview_scheduled, closed]
+        benefitStatus:
+          type: string
+          enum: [not_applicable, pending_confirmation, confirmed, declined]
+        operatorNotes:
+          type: string
+          maxLength: 500
+    AdminPreRegistrationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/AdminPreRegistrationItem'
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+    AdminPreRegistrationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminPreRegistrationItem'
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+        meta:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+    AdminPreRegistrationItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        contactType:
+          type: string
+          enum: [email, phone]
+        contact:
+          type: string
+        participationType:
+          type: string
+          enum: [early_access, survey_10, interview_20]
+        reason:
+          type: string
+        reasonOther:
+          type: string
+          nullable: true
+        contactConsentVersion:
+          type: string
+        survey:
+          type: object
+          additionalProperties: true
+          nullable: true
+        interview:
+          type: object
+          additionalProperties: true
+          nullable: true
+        utm:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        benefitStatus:
+          type: string
+        operatorNotes:
+          type: string
+          nullable: true
+        contactedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
     LoginRequest:
       type: object
       required: [identifier, password]

@@ -5,7 +5,7 @@ NestJS + PostgreSQL backend for the Persona AI MVP.
 ## v1.0 source and guardrails
 
 - `TalkTo_개발자용_기능명세서_v1.0.md` is the source of truth for v1.0 behavior when it conflicts with older Notion rows, pasted notes, or the legacy MVP docs.
-- Current backend scope is legacy Persona Chat MVP plus Archive-first foundations for subjects, consents, questions, recordings, payments, entitlements, queued paid analysis jobs, admin worker transition endpoints for paid analysis jobs, paid Memories search over indexed analysis segments, memory segment playback/feedback, in-app analysis status notifications, and R&D redacted export opt-in/preview guardrails.
+- Current backend scope is legacy Persona Chat MVP plus public landing pre-registrations, Archive-first foundations for subjects, consents, questions, recordings, payments, entitlements, queued paid analysis jobs, admin worker transition endpoints for paid analysis jobs, paid Memories search over indexed analysis segments, memory segment playback/feedback, in-app analysis status notifications, and R&D redacted export opt-in/preview guardrails.
 - Free Archive upload/completion is storage/playback only. It must not create Preview, STT, LLM summary, embedding, memory segment, or analysis job work.
 - Preview/sample analysis is deferred and disabled by the v1.0 contract. `POST /api/v1/recordings/{recordingId}/preview-analysis` exists only as a disabled compatibility route returning `409 feature_deferred`; it must not enqueue Preview, free AI, or analysis job work.
 - Payment products/orders/webhooks/entitlements, paid Archive analysis job creation, `GET /api/v1/memories/status`, `POST /api/v1/memories/search`, memory segment playback/feedback, Voice Persona application core routes, and gated Voice Persona runtime sessions/messages are implemented. Legacy `/memories` CRUD remains separate from paid v1.0 Memories search, and existing `/personas/active` plus `/conversations/*` remain separate from the v1.0 Voice Persona runtime package.
@@ -44,6 +44,7 @@ These values can be changed through `.env`. Local seed data is controlled by `BO
 - memory CRUD, soft deactivate, revision log, embedding chunk records, pgvector-backed retrieval
 - per-message feedback
 - admin overview/daily metrics and error log APIs
+- public landing pre-registration submission with conditional survey/interview answers and audited admin/ops follow-up APIs
 - global CORS configuration
 - global rate limiting
 - environment validation on bootstrap

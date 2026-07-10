@@ -28,6 +28,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { QuestionsModule } from './questions/questions.module';
 import { RecordingsModule } from './recordings/recordings.module';
 import { ProductsModule } from './products/products.module';
+import { PreRegistrationsModule } from './pre-registrations/pre-registrations.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { buildTypeOrmOptions } from './database/typeorm.config';
 import { validateEnv } from './config/env.validation';
@@ -70,6 +71,7 @@ import { Persona } from './personas/persona.entity';
     PaymentsModule,
     PersonasModule,
     PersonaRuntimeModule,
+    PreRegistrationsModule,
     ProductsModule,
     QuestionsModule,
     RecordingsModule,
