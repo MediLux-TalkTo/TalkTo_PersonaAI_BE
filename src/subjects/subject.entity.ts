@@ -19,6 +19,12 @@ import { Recording } from '../recordings/recording.entity';
 import { User } from '../users/user.entity';
 import { FamilyGlossaryTerm } from './family-glossary-term.entity';
 
+export type SubjectFamilyMember = {
+  readonly name: string;
+  readonly relationToSubject: string | null;
+  readonly addressTerms: string[];
+};
+
 @Entity('subjects')
 export class Subject {
   @PrimaryGeneratedColumn('uuid')
@@ -74,6 +80,9 @@ export class Subject {
 
   @Column({ type: 'text', nullable: true, select: false })
   assembledPersonaInstructions: string | null;
+
+  @Column({ type: 'jsonb', default: () => "'[]'::jsonb" })
+  familyMembers: SubjectFamilyMember[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

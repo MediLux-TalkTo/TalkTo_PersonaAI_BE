@@ -104,6 +104,7 @@ describe('AnalysisWorkerTransitionsService', () => {
         analysisStage: AnalysisJobStatus.STT_PROCESSING,
       }),
     );
+    expect(notificationsService.notifyAnalysisFailed).not.toHaveBeenCalled();
   });
 
   it('creates memory segments and embeddings without requiring diarization', async () => {

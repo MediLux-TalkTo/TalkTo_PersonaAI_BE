@@ -16,7 +16,7 @@ import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import { UpsertGlossaryTermDto } from './dto/upsert-glossary-term.dto';
 import { FamilyGlossaryTerm } from './family-glossary-term.entity';
-import { Subject } from './subject.entity';
+import { Subject, type SubjectFamilyMember } from './subject.entity';
 
 const RELATIONSHIP_LABELS: Record<string, string> = {
   grandmother: '할머니',
@@ -57,6 +57,7 @@ export class SubjectsService {
       localeHint: dto.localeHint ?? null,
       dialectHint: dto.dialectHint ?? null,
       notes: dto.notes ?? null,
+      familyMembers: this.normalizeFamilyMembers(dto.familyMembers),
     });
 
     const savedSubject = await this.subjectsRepository.save(subject);
@@ -121,6 +122,7 @@ export class SubjectsService {
       avatarType: subject.avatarType ?? SubjectAvatarType.DEFAULT,
       recordingCountCache: subject.recordingCountCache ?? 0,
       recordingSecondsCache: subject.recordingSecondsCache ?? 0,
+      familyMembers: subject.familyMembers ?? [],
       memoriesStatus:
         subject.memoriesStatus ?? SubjectReadinessStatus.NOT_STARTED,
       personaStatus: subject.personaStatus ?? SubjectReadinessStatus.NOT_STARTED,
@@ -149,6 +151,10 @@ export class SubjectsService {
       dialectHint:
         dto.dialectHint === undefined ? subject.dialectHint : dto.dialectHint,
       notes: dto.notes === undefined ? subject.notes : dto.notes,
+      familyMembers:
+        dto.familyMembers === undefined
+          ? subject.familyMembers
+          : this.normalizeFamilyMembers(dto.familyMembers),
     });
 
     await this.subjectsRepository.save(subject);
@@ -261,5 +267,21 @@ export class SubjectsService {
     }
 
     return regionParts.join(' · ');
+  }
+
+  private normalizeFamilyMembers(
+    familyMembers: CreateSubjectDto['familyMembers'],
+  ): SubjectFamilyMember[] {
+    return (familyMembers ?? []).map((member) => ({
+      name: member.name.trim(),
+      relationToSubject: member.relationToSubject?.trim() || null,
+      addressTerms: Array.from(
+        new Set(
+          (member.addressTerms ?? [])
+            .map((addressTerm) => addressTerm.trim())
+            .filter(Boolean),
+        ),
+      ),
+    }));
   }
 }

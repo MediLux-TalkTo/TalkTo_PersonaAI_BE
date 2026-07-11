@@ -49,6 +49,13 @@ describe('SubjectsService', () => {
     await service.create('user-id', {
       displayName: '할머니',
       relationship: 'grandmother',
+      familyMembers: [
+        {
+          name: '종서',
+          relationToSubject: '막내아들',
+          addressTerms: ['종서야'],
+        },
+      ],
     });
 
     expect(subjectsRepository.create).toHaveBeenCalledWith(
@@ -57,6 +64,13 @@ describe('SubjectsService', () => {
         displayName: '할머니',
         relationship: 'grandmother',
         lifeStatus: SubjectLifeStatus.UNKNOWN,
+        familyMembers: [
+          {
+            name: '종서',
+            relationToSubject: '막내아들',
+            addressTerms: ['종서야'],
+          },
+        ],
       }),
     );
     expect(appEventsService.emit).toHaveBeenCalledWith({
@@ -108,6 +122,7 @@ describe('SubjectsService', () => {
         recordingSeconds: 184,
         memoriesStatus: 'NOT_STARTED',
         personaStatus: 'NOT_STARTED',
+        familyMembers: [],
       }),
     );
   });

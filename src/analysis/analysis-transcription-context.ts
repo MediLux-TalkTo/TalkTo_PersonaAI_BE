@@ -34,7 +34,11 @@ export function buildSubjectContext(input: {
       addressTerm: input.subject.relationship,
       name: input.subject.displayName,
     },
-    familyMembers: [],
+    familyMembers: (input.subject.familyMembers ?? []).map((member) => ({
+      name: member.name,
+      relationToSubject: member.relationToSubject,
+      addressTerms: member.addressTerms,
+    })),
     glossaryTerms: input.glossaryTerms,
   };
 }

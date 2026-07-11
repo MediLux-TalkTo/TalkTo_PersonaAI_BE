@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { TranscriptSegment } from '../analysis/transcript-segment.entity';
+import { AnalysisJobStatus } from '../analysis/analysis-job.constants';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { Entitlement } from '../payments/entitlement.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
@@ -25,6 +26,7 @@ describe('VoicePersonaService', () => {
   const familyReviewsRepository = repoMock();
   const runtimeConfigsRepository = repoMock();
   const subjectsRepository = repoMock();
+  const analysisJobsRepository = repoMock();
   const transcriptSegmentsRepository = repoMock();
   const recordingsRepository = repoMock();
   const entitlementsRepository = {
@@ -64,6 +66,7 @@ describe('VoicePersonaService', () => {
       familyReviewsRepository,
       runtimeConfigsRepository,
       subjectsRepository,
+      analysisJobsRepository,
       transcriptSegmentsRepository,
       recordingsRepository,
     ]) {
@@ -74,6 +77,7 @@ describe('VoicePersonaService', () => {
     }
     subjectsService.getOwned.mockResolvedValue(buildSubject());
     transcriptSegmentsRepository.find.mockResolvedValue([buildTranscriptSegment()]);
+    analysisJobsRepository.find.mockResolvedValue([]);
     samplesRepository.findOne.mockResolvedValue(null);
     samplesRepository.find.mockResolvedValue([]);
     recordingsRepository.findOne.mockResolvedValue(
@@ -111,6 +115,7 @@ describe('VoicePersonaService', () => {
       runtimeConfigsRepository as never,
       entitlementsRepository as never,
       subjectsRepository as never,
+      analysisJobsRepository as never,
       transcriptSegmentsRepository as never,
       recordingsRepository as never,
       subjectsService as never,
@@ -318,7 +323,6 @@ describe('VoicePersonaService', () => {
       reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
     });
     applicationsRepository.findOne.mockResolvedValue(buildApplication());
-
     await expect(
       service.reviewDocument('document-id', 'admin-id', {
         status: VoicePersonaReviewStatus.APPROVED,
@@ -367,6 +371,28 @@ describe('VoicePersonaService', () => {
       reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
     });
     applicationsRepository.findOne.mockResolvedValue(buildApplication());
+    analysisJobsRepository.find.mockResolvedValue([
+      {
+        id: 'analysis-job-id',
+        subjectSpeakerLabel: 'SPK_0',
+        status: AnalysisJobStatus.COMPLETED,
+      },
+    ]);
+    transcriptSegmentsRepository.find.mockResolvedValue([
+      Object.assign(new TranscriptSegment(), {
+        jobId: 'analysis-job-id',
+        recordingId: 'recording-id-2',
+        speakerLabel: 'SPK_0',
+        startMs: 45000,
+        endMs: 57000,
+      }),
+    ]);
+    recordingsRepository.find.mockResolvedValue([
+      Object.assign(new Recording(), {
+        id: 'recording-id-2',
+        storageKey: 'recordings/user-id/subject-id/recording-2.m4a',
+      }),
+    ]);
 
     await expect(
       service.reviewVoiceSample('sample-id', 'admin-id', {
@@ -387,6 +413,11 @@ describe('VoicePersonaService', () => {
             audioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
             startMs: 30000,
             endMs: 41000,
+          },
+          {
+            audioUrl: 'https://storage.example/sample.m4a?signature=test-signature',
+            startMs: 45000,
+            endMs: 57000,
           },
         ],
       },

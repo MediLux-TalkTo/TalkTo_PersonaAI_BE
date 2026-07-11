@@ -6,6 +6,7 @@ import {
   SubjectLifeStatus,
   SubjectReadinessStatus,
 } from '../../common/enums/archive.enums';
+import { SubjectFamilyMemberDto } from './subject-family-member.dto';
 
 export class FamilyGlossaryTermDto {
   @ApiProperty({ example: 'term-001' })
@@ -75,6 +76,9 @@ export class SubjectDto {
 
   @ApiProperty({ type: [FamilyGlossaryTermDto] })
   glossaryTerms?: FamilyGlossaryTermDto[];
+
+  @ApiProperty({ type: [SubjectFamilyMemberDto] })
+  familyMembers: SubjectFamilyMemberDto[];
 }
 
 export class SubjectResponseDto {

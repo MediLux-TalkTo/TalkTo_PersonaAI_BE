@@ -98,6 +98,20 @@ export class MemoriesService {
     return this.getById(saved.id);
   }
 
+  async hasActiveAiExtractedMemory(
+    userId: string,
+    summary: string,
+  ): Promise<boolean> {
+    const memory = await this.memoriesRepository.findOne({
+      where: {
+        createdBy: userId,
+        status: MemoryStatus.ACTIVE,
+        bodyMarkdown: summary,
+      },
+    });
+    return Boolean(memory);
+  }
+
   async update(userId: string, memoryId: string, dto: UpdateMemoryDto): Promise<Memory> {
     const memory = await this.getById(memoryId);
     const beforeSnapshot = { ...memory };

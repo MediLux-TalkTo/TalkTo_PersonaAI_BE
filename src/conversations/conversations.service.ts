@@ -566,12 +566,21 @@ export class ConversationsService {
       }
 
       for (const candidate of storeableCandidates) {
+        const summary = candidate.summary.trim();
+        if (
+          await this.memoriesService.hasActiveAiExtractedMemory(
+            params.userId,
+            summary,
+          )
+        ) {
+          continue;
+        }
         await this.memoriesService.create(params.userId, {
-          title: candidate.summary.slice(0, 120),
+          title: summary.slice(0, 120),
           memoryType: 'SHORT_TERM',
           relatedPeople: [],
           relatedPeriod: undefined,
-          bodyMarkdown: candidate.summary,
+          bodyMarkdown: summary,
           tags: [
             ...(candidate.category ? [`category:${candidate.category}`] : []),
             'source:ai_memory_extract',

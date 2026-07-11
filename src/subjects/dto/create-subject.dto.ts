@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { SubjectLifeStatus } from '../../common/enums/archive.enums';
+import { SubjectFamilyMemberDto } from './subject-family-member.dto';
 
 export class CreateSubjectDto {
   @ApiProperty({ example: '할머니', maxLength: 100 })
@@ -37,4 +46,11 @@ export class CreateSubjectDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ type: [SubjectFamilyMemberDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubjectFamilyMemberDto)
+  familyMembers?: SubjectFamilyMemberDto[];
 }

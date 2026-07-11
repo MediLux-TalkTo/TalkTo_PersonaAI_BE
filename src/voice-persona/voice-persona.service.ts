@@ -5,9 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
 import type { AiVoiceCloneSample } from '../ai/ai-analysis-transcription.types';
+import { AnalysisJob } from '../analysis/analysis-job.entity';
+import { AnalysisJobStatus } from '../analysis/analysis-job.constants';
 import { TranscriptSegment } from '../analysis/transcript-segment.entity';
 import {
   buildGlossaryTerms,
@@ -60,6 +62,9 @@ import {
 import { VoicePersonaApplication } from './voice-persona-application.entity';
 import { VoicePersonaDocument } from './voice-persona-document.entity';
 
+const VOICE_CLONE_SAMPLE_LIMIT = 100;
+const MIN_VOICE_CLONE_SEGMENT_MS = 800;
+
 @Injectable()
 export class VoicePersonaService {
   constructor(
@@ -85,6 +90,8 @@ export class VoicePersonaService {
     private readonly entitlementsRepository: Repository<Entitlement>,
     @InjectRepository(Subject)
     private readonly subjectsRepository: Repository<Subject>,
+    @InjectRepository(AnalysisJob)
+    private readonly analysisJobsRepository: Repository<AnalysisJob>,
     @InjectRepository(TranscriptSegment)
     private readonly transcriptSegmentsRepository: Repository<TranscriptSegment>,
     @InjectRepository(Recording)
@@ -444,13 +451,13 @@ export class VoicePersonaService {
         reviewStatus: VoicePersonaReviewStatus.APPROVED,
       },
       order: { createdAt: 'ASC' },
-      take: 100,
+      take: VOICE_CLONE_SAMPLE_LIMIT,
     });
     const candidates = approvedSamples.some(
       (candidate) => candidate.id === fallbackSample.id,
     )
       ? approvedSamples
-      : [fallbackSample, ...approvedSamples].slice(0, 100);
+      : [fallbackSample, ...approvedSamples].slice(0, VOICE_CLONE_SAMPLE_LIMIT);
 
     const samples: AiVoiceCloneSample[] = [];
     for (const candidate of candidates) {
@@ -461,6 +468,76 @@ export class VoicePersonaService {
       if (cloneSample) {
         samples.push(cloneSample);
       }
+    }
+    const automaticSamples = await this.subjectSpeakerCloneSamples(
+      application,
+      VOICE_CLONE_SAMPLE_LIMIT - samples.length,
+    );
+    return [...samples, ...automaticSamples].slice(0, VOICE_CLONE_SAMPLE_LIMIT);
+  }
+
+  private async subjectSpeakerCloneSamples(
+    application: VoicePersonaApplication,
+    limit: number,
+  ): Promise<AiVoiceCloneSample[]> {
+    if (limit <= 0) {
+      return [];
+    }
+    const jobs = await this.analysisJobsRepository.find({
+      where: {
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+        status: AnalysisJobStatus.COMPLETED,
+      },
+      order: { completedAt: 'DESC' },
+      take: VOICE_CLONE_SAMPLE_LIMIT,
+    });
+    const labeledJobs = jobs.filter(
+      (job): job is AnalysisJob & { subjectSpeakerLabel: string } =>
+        Boolean(job.subjectSpeakerLabel),
+    );
+    if (labeledJobs.length === 0) {
+      return [];
+    }
+    const transcriptSegments = await this.transcriptSegmentsRepository.find({
+      where: labeledJobs.map((job) => ({
+        jobId: job.id,
+        speakerLabel: job.subjectSpeakerLabel,
+      })),
+      order: { updatedAt: 'DESC' },
+      take: limit,
+    });
+    const recordingIds = [...new Set(transcriptSegments.map((segment) => segment.recordingId))];
+    if (recordingIds.length === 0) {
+      return [];
+    }
+    const recordings = await this.recordingsRepository.find({
+      where: {
+        id: In(recordingIds),
+        ownerUserId: application.ownerUserId,
+      },
+    });
+    const storageKeys = new Map(
+      recordings.flatMap((recording) =>
+        recording.storageKey ? [[recording.id, recording.storageKey] as const] : [],
+      ),
+    );
+    const samples: AiVoiceCloneSample[] = [];
+    for (const segment of transcriptSegments) {
+      if (segment.endMs - segment.startMs < MIN_VOICE_CLONE_SEGMENT_MS) {
+        continue;
+      }
+      const storageKey = storageKeys.get(segment.recordingId);
+      if (!storageKey) {
+        continue;
+      }
+      samples.push(
+        await this.createVoiceCloneSample(
+          storageKey,
+          segment.startMs,
+          segment.endMs,
+        ),
+      );
     }
     return samples;
   }
@@ -473,16 +550,24 @@ export class VoicePersonaService {
     if (!storageKey) {
       return null;
     }
-    const audioUrl = (await this.audioStorageService.createPlaybackUrl(storageKey, 1800))
-      .playbackUrl;
     if (sample.startMs === null || sample.endMs === null) {
+      return this.createVoiceCloneSample(storageKey);
+    }
+    return this.createVoiceCloneSample(storageKey, sample.startMs, sample.endMs);
+  }
+
+  private async createVoiceCloneSample(
+    storageKey: string,
+    startMs?: number,
+    endMs?: number,
+  ): Promise<AiVoiceCloneSample> {
+    const audioUrl = (
+      await this.audioStorageService.createPlaybackUrl(storageKey, 1800)
+    ).playbackUrl;
+    if (startMs === undefined || endMs === undefined) {
       return { audioUrl };
     }
-    return {
-      audioUrl,
-      startMs: sample.startMs,
-      endMs: sample.endMs,
-    };
+    return { audioUrl, startMs, endMs };
   }
 
   private async targetVoiceSampleStorageKey(

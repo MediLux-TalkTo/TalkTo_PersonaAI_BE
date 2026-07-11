@@ -8,6 +8,7 @@ import { AudioStorageService } from '../storage/audio-storage.service';
 import { FamilyGlossaryTerm } from '../subjects/family-glossary-term.entity';
 import { Subject } from '../subjects/subject.entity';
 import { PersonaIntake } from '../voice-persona/persona-intake.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
 import { TargetVoiceSample } from '../voice-persona/target-voice-sample.entity';
 import { VoicePersonaApplication } from '../voice-persona/voice-persona-application.entity';
 import { AnalysisAiTranscriptionService } from './analysis-ai-transcription.service';
@@ -30,6 +31,11 @@ describe('AnalysisAiTranscriptionService', () => {
   const reflectionsRepository = {
     create: jest.fn(),
     delete: jest.fn(),
+    save: jest.fn(),
+  };
+  const personaBiblesRepository = {
+    create: jest.fn(),
+    findOne: jest.fn(),
     save: jest.fn(),
   };
   const audioStorageService = { createPlaybackUrl: jest.fn() };
@@ -89,6 +95,14 @@ describe('AnalysisAiTranscriptionService', () => {
     reflectionsRepository.create.mockImplementation((value) => value);
     reflectionsRepository.delete.mockResolvedValue({ affected: 1 });
     reflectionsRepository.save.mockImplementation(async (value) => value);
+    personaBiblesRepository.findOne.mockResolvedValue({
+      id: 'persona-bible-id',
+      applicationId: 'application-id',
+      assembledInstructions: 'previous Persona Bible prompt',
+      reviewStatus: 'approved',
+    });
+    personaBiblesRepository.create.mockImplementation((value) => value);
+    personaBiblesRepository.save.mockImplementation(async (value) => value);
     aiClientService.requestRecordingAnalysis.mockResolvedValue({
       memorySegments: [
         {
@@ -151,6 +165,7 @@ describe('AnalysisAiTranscriptionService', () => {
         },
         { provide: getRepositoryToken(MemorySegment), useValue: memorySegmentsRepository },
         { provide: getRepositoryToken(PersonaReflection), useValue: reflectionsRepository },
+        { provide: getRepositoryToken(PersonaBible), useValue: personaBiblesRepository },
         { provide: AudioStorageService, useValue: audioStorageService },
         { provide: AiClientService, useValue: aiClientService },
         {
@@ -188,7 +203,13 @@ describe('AnalysisAiTranscriptionService', () => {
       glossary: ['정읍', '정으비', '매실청'],
       subjectContext: {
         subject: { addressTerm: '외할머니', name: '신금자' },
-        familyMembers: [],
+        familyMembers: [
+          {
+            name: '종서',
+            relationToSubject: '막내아들',
+            addressTerms: ['종서야'],
+          },
+        ],
         glossaryTerms: ['정읍', '정으비', '매실청'],
       },
       intakeContext: {
@@ -341,6 +362,13 @@ describe('AnalysisAiTranscriptionService', () => {
       }),
       expect.objectContaining({ feature: ConsentFeature.VOICE_PERSONA }),
     );
+    expect(personaBiblesRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'persona-bible-id',
+        assembledInstructions: '통찰 반영 페르소나 프롬프트',
+        reviewStatus: 'approved',
+      }),
+    );
   });
 
   it('maps AI empty transcript failures to the PRV-003 quality guidance code path', async () => {
@@ -362,6 +390,39 @@ describe('AnalysisAiTranscriptionService', () => {
       failureCode: 'empty_transcript',
       failureMessage: 'PRV-003 음질 부족: 음성 인식 결과가 비어 있습니다.',
     });
+  });
+
+  it('creates a pending Persona Bible when assembly has no prior draft', async () => {
+    personaBiblesRepository.findOne.mockResolvedValue(null);
+    audioStorageService.createPlaybackUrl.mockResolvedValue({
+      playbackUrl: 'https://storage.example/recording.m4a?X-Amz-Signature=test-signature',
+      expiresAt: new Date(),
+      ttlSeconds: 1800,
+      downloadAllowed: false,
+    });
+    aiClientService.requestAnalysisTranscription.mockResolvedValue({
+      segments: [
+        {
+          segmentIndex: 0,
+          startMs: 0,
+          endMs: 1200,
+          speakerLabel: 'SPK_0',
+          transcriptText: '정읍 이야기',
+        },
+      ],
+    });
+
+    await service.requestAndPersistTranscription('job-id', 'full');
+
+    expect(personaBiblesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: 'application-id',
+        ownerUserId: 'user-id',
+        subjectId: 'subject-id',
+        assembledInstructions: '통찰 반영 페르소나 프롬프트',
+        reviewStatus: 'pending_review',
+      }),
+    );
   });
 });
 
@@ -396,6 +457,13 @@ function buildSubject(): Subject {
     displayName: '신금자',
     relationship: '외할머니',
     localeHint: 'ko',
+    familyMembers: [
+      {
+        name: '종서',
+        relationToSubject: '막내아들',
+        addressTerms: ['종서야'],
+      },
+    ],
     glossaryTerms: [
       Object.assign(new FamilyGlossaryTerm(), {
         term: '정읍',

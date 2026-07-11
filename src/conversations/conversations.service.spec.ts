@@ -40,6 +40,7 @@ describe('ConversationsService AI consent context', () => {
     };
     const memoriesService = {
       create: jest.fn(),
+      hasActiveAiExtractedMemory: jest.fn().mockResolvedValue(false),
     };
 
     const service = new ConversationsService(
@@ -125,6 +126,34 @@ describe('ConversationsService AI consent context', () => {
       },
       memoriesConsentContext,
     );
+  });
+
+  it('skips an AI memory candidate already stored for the user', async () => {
+    const { aiClientService, memoriesService, service } = createService();
+    aiClientService.extractMemoryCandidates.mockResolvedValue({
+      candidates: [
+        {
+          summary: '사용자가 다음 주에 새 직장에 출근한다.',
+          shouldStore: true,
+        },
+      ],
+    });
+    memoriesService.hasActiveAiExtractedMemory.mockResolvedValue(true);
+
+    await service['extractShortTermMemory']({
+      userId: ownerUserId,
+      conversationId: 'conversation-id',
+      history: [],
+      userMessage: '나 다음 주에 새 직장 출근해.',
+      assistantMessage: '잘됐다.',
+      consentContext: memoriesConsentContext,
+    });
+
+    expect(memoriesService.hasActiveAiExtractedMemory).toHaveBeenCalledWith(
+      ownerUserId,
+      '사용자가 다음 주에 새 직장에 출근한다.',
+    );
+    expect(memoriesService.create).not.toHaveBeenCalled();
   });
 
   it('uses the sole enabled beta persona runtime for legacy chat', async () => {

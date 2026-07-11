@@ -15,8 +15,10 @@ import { Recording } from '../recordings/recording.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { Subject } from '../subjects/subject.entity';
 import { PersonaIntake } from '../voice-persona/persona-intake.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
 import { PersonaReflection } from '../voice-persona/persona-reflection.entity';
 import { TargetVoiceSample } from '../voice-persona/target-voice-sample.entity';
+import { VoicePersonaReviewStatus } from '../voice-persona/voice-persona.constants';
 import { VoicePersonaApplication } from '../voice-persona/voice-persona-application.entity';
 import {
   aiFailureMessage,
@@ -66,6 +68,8 @@ export class AnalysisAiTranscriptionService {
     private readonly memorySegmentsRepository: Repository<MemorySegment>,
     @InjectRepository(PersonaReflection)
     private readonly reflectionsRepository: Repository<PersonaReflection>,
+    @InjectRepository(PersonaBible)
+    private readonly personaBiblesRepository: Repository<PersonaBible>,
     private readonly audioStorageService: AudioStorageService,
     private readonly aiClientService: AiClientService,
     private readonly workerTransitionsService: AnalysisWorkerTransitionsService,
@@ -410,6 +414,25 @@ export class AnalysisAiTranscriptionService {
     }
     context.subject.assembledPersonaInstructions = assembly.instructions;
     await this.subjectsRepository.save(context.subject);
+    let bible = await this.personaBiblesRepository.findOne({
+      where: { applicationId: application.id },
+    });
+    if (!bible) {
+      bible = this.personaBiblesRepository.create({
+        applicationId: application.id,
+        ownerUserId: application.ownerUserId,
+        subjectId: application.subjectId,
+        contentSummary: '자동 조립된 페르소나 지침',
+        safetyNotes: null,
+        assembledInstructions: assembly.instructions,
+        reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
+        reviewerUserId: null,
+        reviewedAt: null,
+      });
+    } else {
+      bible.assembledInstructions = assembly.instructions;
+    }
+    await this.personaBiblesRepository.save(bible);
   }
 
   private async loadSpeechExamples(

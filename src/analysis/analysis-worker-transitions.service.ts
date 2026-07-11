@@ -83,7 +83,6 @@ export class AnalysisWorkerTransitionsService {
       },
     );
     const savedJob = await this.saveJobAndProgress(job, recording);
-    await this.notificationsService.notifyAnalysisFailed(savedJob);
     return savedJob;
   }
 

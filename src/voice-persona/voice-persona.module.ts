@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AiModule } from '../ai/ai.module';
 import { TranscriptSegment } from '../analysis/transcript-segment.entity';
+import { AnalysisJob } from '../analysis/analysis-job.entity';
 import { ConsentsModule } from '../consents/consents.module';
 import { EventsModule } from '../events/events.module';
 import { Entitlement } from '../payments/entitlement.entity';
@@ -39,6 +40,7 @@ import { VoicePersonaService } from './voice-persona.service';
       PersonaRuntimeConfig,
       Entitlement,
       Subject,
+      AnalysisJob,
       TranscriptSegment,
       Recording,
     ]),
