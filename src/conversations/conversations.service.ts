@@ -22,9 +22,15 @@ import {
   MessageStatus,
 } from '../common/enums/message.enums';
 import { Memory } from '../memories/memory.entity';
+import { Persona } from '../personas/persona.entity';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
+import { Subject } from '../subjects/subject.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
+import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
+import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
+import { VoicePersonaReviewStatus } from '../voice-persona/voice-persona.constants';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { SendTextMessageDto } from './dto/send-text-message.dto';
 import { SendVoiceMessageDto } from './dto/send-voice-message.dto';
@@ -35,6 +41,13 @@ import { Message } from './message.entity';
 import { VoiceArtifact } from './voice-artifact.entity';
 import { Role } from '../common/enums/role.enum';
 import { MemoryRetrievalService } from './memory-retrieval.service';
+
+const RUNTIME_LOOKUP_LIMIT = 2;
+
+type ResolvedConversationPersona = {
+  readonly persona: Persona;
+  readonly subjectId?: string;
+};
 
 @Injectable()
 export class ConversationsService {
@@ -55,6 +68,14 @@ export class ConversationsService {
     private readonly messageMemoryRefsRepository: Repository<MessageMemoryRef>,
     @InjectRepository(VoiceArtifact)
     private readonly voiceArtifactsRepository: Repository<VoiceArtifact>,
+    @InjectRepository(PersonaRuntimeConfig)
+    private readonly runtimeConfigsRepository: Repository<PersonaRuntimeConfig>,
+    @InjectRepository(Subject)
+    private readonly subjectsRepository: Repository<Subject>,
+    @InjectRepository(PersonaBible)
+    private readonly personaBiblesRepository: Repository<PersonaBible>,
+    @InjectRepository(VoiceProviderAsset)
+    private readonly providerAssetsRepository: Repository<VoiceProviderAsset>,
   ) {}
 
   async createConversation(userId: string, dto: CreateConversationDto) {
@@ -109,15 +130,21 @@ export class ConversationsService {
     dto: SendTextMessageDto,
   ) {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
+    const resolvedPersona = await this.resolveConversationPersona(
+      conversation.userId,
+      await this.personasService.getActivePersona(),
+    );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,
       ConsentFeature.MEMORIES,
+      resolvedPersona.subjectId,
     );
     const voicePersonaConsentContext = this.buildProviderConsentContext(
       conversation.userId,
       ConsentFeature.VOICE_PERSONA,
+      resolvedPersona.subjectId,
     );
-    const persona = await this.personasService.getActivePersona();
+    const persona = resolvedPersona.persona;
     const history = await this.getConversationHistory(conversation.id);
     const relatedMemories = await this.memoryRetrievalService.retrieve(
       dto.content,
@@ -219,15 +246,21 @@ export class ConversationsService {
     }
 
     const conversation = await this.assertConversationOwnership(conversationId, actor);
+    const resolvedPersona = await this.resolveConversationPersona(
+      conversation.userId,
+      await this.personasService.getActivePersona(),
+    );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,
       ConsentFeature.MEMORIES,
+      resolvedPersona.subjectId,
     );
     const voicePersonaConsentContext = this.buildProviderConsentContext(
       conversation.userId,
       ConsentFeature.VOICE_PERSONA,
+      resolvedPersona.subjectId,
     );
-    const persona = await this.personasService.getActivePersona();
+    const persona = resolvedPersona.persona;
     const sttText = await this.resolveSttText(
       conversationId,
       dto,
@@ -580,11 +613,70 @@ export class ConversationsService {
   private buildProviderConsentContext(
     ownerUserId: string,
     feature: ConsentFeature,
+    subjectId?: string,
   ): AiProviderConsentContext {
     return {
       ownerUserId,
       feature,
+      ...(subjectId ? { subjectId } : {}),
       bypassConsentCheck: true,
+    };
+  }
+
+  private async resolveConversationPersona(
+    ownerUserId: string,
+    fallbackPersona: Persona,
+  ): Promise<ResolvedConversationPersona> {
+    const runtimeConfigs = await this.runtimeConfigsRepository.find({
+      where: { ownerUserId, enabled: true },
+      order: { enabledAt: 'DESC', createdAt: 'DESC' },
+      take: RUNTIME_LOOKUP_LIMIT,
+    });
+    if (runtimeConfigs.length !== 1) {
+      return { persona: fallbackPersona };
+    }
+
+    const runtimeConfig = runtimeConfigs[0];
+    const bible = await this.personaBiblesRepository
+      .createQueryBuilder('bible')
+      .addSelect('bible.assembledInstructions')
+      .where('bible.id = :personaBibleId', {
+        personaBibleId: runtimeConfig.personaBibleId,
+      })
+      .andWhere('bible.ownerUserId = :ownerUserId', { ownerUserId })
+      .andWhere('bible.reviewStatus = :reviewStatus', {
+        reviewStatus: VoicePersonaReviewStatus.APPROVED,
+      })
+      .getOne();
+    if (!bible?.assembledInstructions) {
+      return { persona: fallbackPersona };
+    }
+
+    const subject = await this.subjectsRepository.findOne({
+      where: {
+        id: runtimeConfig.subjectId,
+        ownerUserId,
+      },
+    });
+    if (!subject) {
+      return { persona: fallbackPersona };
+    }
+
+    const providerAsset = await this.providerAssetsRepository.findOne({
+      where: {
+        id: runtimeConfig.providerAssetId,
+        ownerUserId,
+        subjectId: subject.id,
+      },
+    });
+    return {
+      persona: Object.assign(new Persona(), fallbackPersona, {
+        id: subject.id,
+        displayName: subject.displayName,
+        description: bible.assembledInstructions,
+        voiceId: providerAsset?.externalAssetId ?? fallbackPersona.voiceId,
+      }),
+      subjectId: subject.id,
     };
   }
 

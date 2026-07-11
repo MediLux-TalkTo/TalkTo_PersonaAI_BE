@@ -532,6 +532,16 @@ export class VoicePersonaService {
     dto: UpsertPersonaBibleDto,
   ) {
     const application = await this.loadApplication(applicationId);
+    const assembledInstructions = await this.loadAssembledPersonaInstructions(
+      application.subjectId,
+      application.ownerUserId,
+    );
+    if (!assembledInstructions) {
+      throw new BadRequestException({
+        code: 'persona_instructions_not_assembled',
+        message: 'Assembled Persona instructions are required before Bible review.',
+      });
+    }
     let bible = await this.personaBiblesRepository.findOne({
       where: { applicationId },
     });
@@ -547,6 +557,10 @@ export class VoicePersonaService {
     }
     bible.contentSummary = dto.contentSummary;
     bible.safetyNotes = dto.safetyNotes ?? null;
+    bible.assembledInstructions = assembledInstructions;
+    bible.reviewStatus = VoicePersonaReviewStatus.PENDING_REVIEW;
+    bible.reviewerUserId = null;
+    bible.reviewedAt = null;
     const savedBible = await this.personaBiblesRepository.save(bible);
     await this.auditVoicePersonaAdminAction(actorUserId, 'persona_bible_upsert', {
       applicationId,
@@ -709,6 +723,19 @@ export class VoicePersonaService {
       throw new NotFoundException('Voice Persona application not found.');
     }
     return application;
+  }
+
+  private async loadAssembledPersonaInstructions(
+    subjectId: string,
+    ownerUserId: string,
+  ): Promise<string | null> {
+    const subject = await this.subjectsRepository
+      .createQueryBuilder('subject')
+      .addSelect('subject.assembledPersonaInstructions')
+      .where('subject.id = :subjectId', { subjectId })
+      .andWhere('subject.ownerUserId = :ownerUserId', { ownerUserId })
+      .getOne();
+    return subject?.assembledPersonaInstructions ?? null;
   }
 
   private async loadApplication(applicationId: string) {

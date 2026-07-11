@@ -13,7 +13,7 @@ describe('PersonaRuntimeService', () => {
   const embeddingsRepository = {
     find: jest.fn(),
   };
-  const subjectsRepository = {
+  const personaBiblesRepository = {
     createQueryBuilder: jest.fn(),
   };
   const providerAssetsRepository = {
@@ -54,13 +54,13 @@ describe('PersonaRuntimeService', () => {
         memorySegment: buildMemorySegment(),
       },
     ]);
-    subjectsRepository.createQueryBuilder.mockReturnValue({
+    personaBiblesRepository.createQueryBuilder.mockReturnValue({
       addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       getOne: jest.fn().mockResolvedValue({
-        id: 'subject-id',
-        assembledPersonaInstructions: '조립된 페르소나 프롬프트',
+        id: 'persona-bible-id',
+        assembledInstructions: '조립된 페르소나 프롬프트',
       }),
     });
     providerAssetsRepository.findOne.mockResolvedValue({
@@ -83,7 +83,7 @@ describe('PersonaRuntimeService', () => {
       runtimeConfigsRepository as never,
       memorySegmentsRepository as never,
       embeddingsRepository as never,
-      subjectsRepository as never,
+      personaBiblesRepository as never,
       providerAssetsRepository as never,
       consentsService as never,
       aiClientService as never,

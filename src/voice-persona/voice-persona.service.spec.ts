@@ -238,6 +238,37 @@ describe('VoicePersonaService', () => {
     });
   });
 
+  it('snapshots assembled instructions into a pending Persona Bible revision', async () => {
+    applicationsRepository.findOne.mockResolvedValue(buildApplication());
+    subjectsRepository.createQueryBuilder.mockReturnValue({
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        assembledPersonaInstructions: '승인 대기 페르소나 프롬프트',
+      }),
+    });
+    personaBiblesRepository.findOne.mockResolvedValue({
+      id: 'persona-bible-id',
+      reviewStatus: VoicePersonaReviewStatus.APPROVED,
+      reviewerUserId: 'reviewer-id',
+      reviewedAt: new Date(),
+    });
+
+    await service.upsertPersonaBible('application-id', 'admin-id', {
+      contentSummary: '가족을 챙기는 다정한 말투',
+    });
+
+    expect(personaBiblesRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assembledInstructions: '승인 대기 페르소나 프롬프트',
+        reviewStatus: VoicePersonaReviewStatus.PENDING_REVIEW,
+        reviewerUserId: null,
+        reviewedAt: null,
+      }),
+    );
+  });
+
   it('stores selected target voice sample ranges and rejects invalid ranges', async () => {
     applicationsRepository.findOne.mockResolvedValue(buildApplication());
 
@@ -451,6 +482,7 @@ function repoMock() {
     save: jest.fn(),
     findOne: jest.fn(),
     find: jest.fn(),
+    createQueryBuilder: jest.fn(),
   };
 }
 

@@ -7,6 +7,10 @@ import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
 import { PersonasModule } from '../personas/personas.module';
 import { StorageModule } from '../storage/storage.module';
+import { Subject } from '../subjects/subject.entity';
+import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
+import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
 import { ChatRuntimeService } from './chat-runtime.service';
 import { Conversation } from './conversation.entity';
 import { ConversationsController } from './conversations.controller';
@@ -25,6 +29,10 @@ import { VoiceArtifact } from './voice-artifact.entity';
       VoiceArtifact,
       Memory,
       MemoryEmbedding,
+      Subject,
+      PersonaRuntimeConfig,
+      PersonaBible,
+      VoiceProviderAsset,
     ]),
     AiModule,
     MemoriesModule,

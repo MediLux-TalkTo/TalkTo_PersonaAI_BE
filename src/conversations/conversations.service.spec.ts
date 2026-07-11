@@ -5,7 +5,12 @@ import { ConsentFeature } from '../common/enums/consent.enums';
 import { Role } from '../common/enums/role.enum';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
+import { Persona } from '../personas/persona.entity';
 import { AudioStorageService } from '../storage/audio-storage.service';
+import { Subject } from '../subjects/subject.entity';
+import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
+import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
 import { ChatRuntimeService } from './chat-runtime.service';
 import { Conversation } from './conversation.entity';
 import { ConversationsService } from './conversations.service';
@@ -50,6 +55,10 @@ describe('ConversationsService AI consent context', () => {
       {} as Repository<Message>,
       {} as Repository<MessageMemoryRef>,
       {} as Repository<VoiceArtifact>,
+      { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<PersonaRuntimeConfig>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<Subject>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<PersonaBible>,
+      { findOne: jest.fn() } as unknown as Repository<VoiceProviderAsset>,
     );
 
     return { aiClientService, memoriesService, service };
@@ -118,6 +127,117 @@ describe('ConversationsService AI consent context', () => {
     );
   });
 
+  it('uses the sole enabled beta persona runtime for legacy chat', async () => {
+    const runtimeConfigsRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          subjectId: 'subject-id',
+          providerAssetId: 'provider-asset-id',
+        },
+      ]),
+    };
+    const bibleQueryBuilder = {
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        id: 'persona-bible-id',
+        assembledInstructions: '짧고 담담한 반말로 답한다.',
+      }),
+    };
+    const subjectsRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'subject-id',
+        displayName: '신금자',
+      }),
+    };
+    const personaBiblesRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(bibleQueryBuilder),
+    };
+    const providerAssetsRepository = {
+      findOne: jest.fn().mockResolvedValue({ externalAssetId: 'clone-voice-id' }),
+    };
+    const service = new ConversationsService(
+      {} as DataSource,
+      {} as PersonasService,
+      {} as ChatRuntimeService,
+      {} as AiClientService,
+      {} as MemoriesService,
+      {} as MemoryRetrievalService,
+      {} as AudioStorageService,
+      {} as AdminService,
+      {} as Repository<Conversation>,
+      {} as Repository<Message>,
+      {} as Repository<MessageMemoryRef>,
+      {} as Repository<VoiceArtifact>,
+      runtimeConfigsRepository as unknown as Repository<PersonaRuntimeConfig>,
+      subjectsRepository as unknown as Repository<Subject>,
+      personaBiblesRepository as unknown as Repository<PersonaBible>,
+      providerAssetsRepository as unknown as Repository<VoiceProviderAsset>,
+    );
+    const fallbackPersona = Object.assign(new Persona(), {
+      id: 'legacy-persona-id',
+      displayName: '우리 할머니',
+      description: '기본 페르소나',
+      voiceId: 'default-voice',
+    });
+
+    await expect(
+      service['resolveConversationPersona']('owner-id', fallbackPersona),
+    ).resolves.toEqual({
+      subjectId: 'subject-id',
+      persona: expect.objectContaining({
+        id: 'subject-id',
+        displayName: '신금자',
+        description: '짧고 담담한 반말로 답한다.',
+        voiceId: 'clone-voice-id',
+      }),
+    });
+  });
+
+  it('keeps the legacy persona when multiple beta runtimes are enabled', async () => {
+    const runtimeConfigsRepository = {
+      find: jest.fn().mockResolvedValue([
+        { subjectId: 'subject-a', providerAssetId: 'asset-a' },
+        { subjectId: 'subject-b', providerAssetId: 'asset-b' },
+      ]),
+    };
+    const subjectsRepository = { findOne: jest.fn() };
+    const personaBiblesRepository = { createQueryBuilder: jest.fn() };
+    const providerAssetsRepository = { findOne: jest.fn() };
+    const service = new ConversationsService(
+      {} as DataSource,
+      {} as PersonasService,
+      {} as ChatRuntimeService,
+      {} as AiClientService,
+      {} as MemoriesService,
+      {} as MemoryRetrievalService,
+      {} as AudioStorageService,
+      {} as AdminService,
+      {} as Repository<Conversation>,
+      {} as Repository<Message>,
+      {} as Repository<MessageMemoryRef>,
+      {} as Repository<VoiceArtifact>,
+      runtimeConfigsRepository as unknown as Repository<PersonaRuntimeConfig>,
+      subjectsRepository as unknown as Repository<Subject>,
+      personaBiblesRepository as unknown as Repository<PersonaBible>,
+      providerAssetsRepository as unknown as Repository<VoiceProviderAsset>,
+    );
+    const fallbackPersona = Object.assign(new Persona(), {
+      id: 'legacy-persona-id',
+      displayName: '우리 할머니',
+      description: '기본 페르소나',
+      voiceId: 'default-voice',
+    });
+
+    await expect(
+      service['resolveConversationPersona']('owner-id', fallbackPersona),
+    ).resolves.toEqual({ persona: fallbackPersona });
+    expect(subjectsRepository.findOne).not.toHaveBeenCalled();
+    expect(personaBiblesRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(providerAssetsRepository.findOne).not.toHaveBeenCalled();
+  });
+
   it('returns a TTS URL for text assistant responses', async () => {
     const manager = {
       create: jest.fn((entity: unknown, value: unknown) => value),
@@ -178,6 +298,10 @@ describe('ConversationsService AI consent context', () => {
       { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<Message>,
       {} as Repository<MessageMemoryRef>,
       {} as Repository<VoiceArtifact>,
+      { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<PersonaRuntimeConfig>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<Subject>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<PersonaBible>,
+      { findOne: jest.fn() } as unknown as Repository<VoiceProviderAsset>,
     );
 
     await expect(
@@ -263,6 +387,10 @@ describe('ConversationsService AI consent context', () => {
       { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<Message>,
       {} as Repository<MessageMemoryRef>,
       {} as Repository<VoiceArtifact>,
+      { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<PersonaRuntimeConfig>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<Subject>,
+      { createQueryBuilder: jest.fn() } as unknown as Repository<PersonaBible>,
+      { findOne: jest.fn() } as unknown as Repository<VoiceProviderAsset>,
     );
 
     await expect(

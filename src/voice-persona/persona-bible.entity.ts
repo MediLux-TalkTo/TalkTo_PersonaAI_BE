@@ -29,6 +29,9 @@ export class PersonaBible {
   @Column({ type: 'text', nullable: true })
   safetyNotes: string | null;
 
+  @Column({ type: 'text', nullable: true, select: false })
+  assembledInstructions: string | null;
+
   @Column({ type: 'varchar', length: 40, default: VoicePersonaReviewStatus.PENDING_REVIEW })
   reviewStatus: VoicePersonaReviewStatus;
 

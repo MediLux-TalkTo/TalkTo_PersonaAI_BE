@@ -6,7 +6,7 @@ import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentsModule } from '../consents/consents.module';
 import { EventsModule } from '../events/events.module';
 import { StorageModule } from '../storage/storage.module';
-import { Subject } from '../subjects/subject.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
 import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
 import { PersonaRuntimeController } from './persona-runtime.controller';
@@ -23,7 +23,7 @@ import { PersonaRuntimeSession } from './persona-runtime-session.entity';
       VoiceProviderAsset,
       MemorySegment,
       AnalysisEmbedding,
-      Subject,
+      PersonaBible,
     ]),
     AiModule,
     ConsentsModule,

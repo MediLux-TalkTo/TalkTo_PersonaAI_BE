@@ -7,7 +7,8 @@ import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { ConsentsService } from '../consents/consents.service';
 import { AppEventsService } from '../events/events.service';
-import { Subject } from '../subjects/subject.entity';
+import { PersonaBible } from '../voice-persona/persona-bible.entity';
+import { VoicePersonaReviewStatus } from '../voice-persona/voice-persona.constants';
 import { AudioStorageService } from '../storage/audio-storage.service';
 import { PersonaRuntimeConfig } from '../voice-persona/persona-runtime-config.entity';
 import { VoiceProviderAsset } from '../voice-persona/voice-provider-asset.entity';
@@ -33,8 +34,8 @@ export class PersonaRuntimeService {
     private readonly memorySegmentsRepository: Repository<MemorySegment>,
     @InjectRepository(AnalysisEmbedding)
     private readonly embeddingsRepository: Repository<AnalysisEmbedding>,
-    @InjectRepository(Subject)
-    private readonly subjectsRepository: Repository<Subject>,
+    @InjectRepository(PersonaBible)
+    private readonly personaBiblesRepository: Repository<PersonaBible>,
     @InjectRepository(VoiceProviderAsset)
     private readonly providerAssetsRepository: Repository<VoiceProviderAsset>,
     private readonly consentsService: ConsentsService,
@@ -156,11 +157,17 @@ export class PersonaRuntimeService {
     ownerUserId: string,
     text: string,
   ): Promise<Partial<PersonaRuntimeMessage>> {
-    const [segments, subject, voiceId] = await Promise.all([
+    const [segments, bible, voiceId] = await Promise.all([
       this.retrieveRuntimeMemories(session, ownerUserId, text),
-      this.loadRuntimeSubject(runtimeConfig),
+      this.loadRuntimeBible(runtimeConfig),
       this.loadVoiceId(runtimeConfig),
     ]);
+    if (!bible?.assembledInstructions) {
+      throw new BadRequestException({
+        code: 'persona_bible_not_approved',
+        message: 'Approved Persona Bible instructions are required before runtime use.',
+      });
+    }
     const aiResponse = await this.aiClientService.chat(
       {
         message: text,
@@ -172,7 +179,7 @@ export class PersonaRuntimeService {
         })),
         persona: {
           subjectId: runtimeConfig.subjectId,
-          instructions: this.personaInstructions(subject),
+          instructions: bible.assembledInstructions,
           voiceId,
         },
       },
@@ -263,24 +270,22 @@ export class PersonaRuntimeService {
       .map((result) => result.segment);
   }
 
-  private async loadRuntimeSubject(
+  private async loadRuntimeBible(
     runtimeConfig: PersonaRuntimeConfig,
-  ): Promise<Subject | null> {
-    return this.subjectsRepository
-      .createQueryBuilder('subject')
-      .addSelect('subject.assembledPersonaInstructions')
-      .where('subject.id = :subjectId', { subjectId: runtimeConfig.subjectId })
-      .andWhere('subject.ownerUserId = :ownerUserId', {
+  ): Promise<PersonaBible | null> {
+    return this.personaBiblesRepository
+      .createQueryBuilder('bible')
+      .addSelect('bible.assembledInstructions')
+      .where('bible.id = :personaBibleId', {
+        personaBibleId: runtimeConfig.personaBibleId,
+      })
+      .andWhere('bible.ownerUserId = :ownerUserId', {
         ownerUserId: runtimeConfig.ownerUserId,
       })
+      .andWhere('bible.reviewStatus = :reviewStatus', {
+        reviewStatus: VoicePersonaReviewStatus.APPROVED,
+      })
       .getOne();
-  }
-
-  private personaInstructions(subject: Subject | null): string {
-    return (
-      subject?.assembledPersonaInstructions ??
-      'Answer as the approved Voice Persona. Use only supplied memories for factual recall.'
-    );
   }
 
   private async loadVoiceId(
