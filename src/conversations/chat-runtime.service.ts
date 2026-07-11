@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import {
+  AiChatMemory,
   AiChatHistoryItem,
   AiClientService,
   AiProviderConsentContext,
 } from '../ai/ai-client.service';
-import { Memory } from '../memories/memory.entity';
 import { Persona } from '../personas/persona.entity';
 
 export interface AssistantReplyResult {
@@ -21,7 +21,7 @@ export class ChatRuntimeService {
   async generateAssistantReply(params: {
     persona: Persona;
     userMessage: string;
-    memories: Memory[];
+    memories: readonly AiChatMemory[];
     history: AiChatHistoryItem[];
     consentContext: AiProviderConsentContext;
   }): Promise<AssistantReplyResult> {
@@ -29,12 +29,7 @@ export class ChatRuntimeService {
     const aiResponse = await this.aiClientService.chat({
       message: params.userMessage,
       history: params.history,
-      memories: params.memories.map((memory) => ({
-        id: memory.id,
-        title: memory.title,
-        content: memory.bodyMarkdown,
-        tags: memory.tags ?? [],
-      })),
+      memories: [...params.memories],
       persona: {
         subjectId: params.persona.id,
         instructions: params.persona.description,
@@ -67,13 +62,13 @@ export class ChatRuntimeService {
   buildFallbackAssistantReply(params: {
     persona: Persona;
     userMessage: string;
-    memories: Memory[];
+    memories: readonly AiChatMemory[];
   }) {
     const { persona, userMessage, memories } = params;
 
     if (memories.length > 0) {
       const primaryMemory = memories[0];
-      return `${persona.displayName}의 기억을 바탕으로 답할게. "${primaryMemory.title}"에 따르면 ${primaryMemory.bodyMarkdown.slice(0, 120)}${primaryMemory.bodyMarkdown.length > 120 ? '...' : ''}`;
+      return `${persona.displayName}의 기억을 바탕으로 답할게. "${primaryMemory.title}"에 따르면 ${primaryMemory.content.slice(0, 120)}${primaryMemory.content.length > 120 ? '...' : ''}`;
     }
 
     return `${persona.displayName}의 말투로 답해볼게. "${userMessage}"에 대해 지금 가진 기억은 많지 않지만 따뜻하게 대화를 이어갈 수 있어.`;

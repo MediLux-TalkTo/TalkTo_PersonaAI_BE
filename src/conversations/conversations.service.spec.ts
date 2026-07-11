@@ -1,6 +1,8 @@
 import { DataSource, Repository } from 'typeorm';
 import { AiClientService } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
+import { AnalysisEmbedding } from '../analysis/analysis-embedding.entity';
+import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import { Role } from '../common/enums/role.enum';
 import { MemoriesService } from '../memories/memories.service';
@@ -265,6 +267,73 @@ describe('ConversationsService AI consent context', () => {
     expect(subjectsRepository.findOne).not.toHaveBeenCalled();
     expect(personaBiblesRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(providerAssetsRepository.findOne).not.toHaveBeenCalled();
+  });
+
+  it('uses subject-scoped analysis memory segments for a beta persona chat', async () => {
+    const aiClientService = {
+      embed: jest.fn().mockResolvedValue([1, 0]),
+    };
+    const memorySegmentsRepository = {
+      find: jest.fn(),
+    };
+    const embeddingsRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          embedding: [1, 0],
+          memorySegment: {
+            id: 'segment-id',
+            segmentIndex: 2,
+            memoryText: '정읍에서 매실청을 담그던 기억',
+            tags: ['family'],
+          },
+        },
+      ]),
+    };
+    const service = new ConversationsService(
+      {} as DataSource,
+      {} as PersonasService,
+      {} as ChatRuntimeService,
+      aiClientService as unknown as AiClientService,
+      {} as MemoriesService,
+      {} as MemoryRetrievalService,
+      {} as AudioStorageService,
+      { recordLog: jest.fn() } as unknown as AdminService,
+      {} as Repository<Conversation>,
+      {} as Repository<Message>,
+      {} as Repository<MessageMemoryRef>,
+      {} as Repository<VoiceArtifact>,
+      {} as Repository<PersonaRuntimeConfig>,
+      {} as Repository<Subject>,
+      {} as Repository<PersonaBible>,
+      {} as Repository<VoiceProviderAsset>,
+      memorySegmentsRepository as unknown as Repository<MemorySegment>,
+      embeddingsRepository as unknown as Repository<AnalysisEmbedding>,
+    );
+
+    const context = await service['retrieveConversationMemories'](
+      '매실청 기억이 나?',
+      {
+        ownerUserId,
+        subjectId: 'subject-id',
+        feature: ConsentFeature.MEMORIES,
+      },
+      'subject-id',
+    );
+
+    expect(aiClientService.embed).toHaveBeenCalledWith('매실청 기억이 나?', {
+      ownerUserId,
+      subjectId: 'subject-id',
+      feature: ConsentFeature.MEMORIES,
+    });
+    expect(context.memories).toEqual([
+      {
+        id: 'segment-id',
+        title: '기억 3',
+        content: '정읍에서 매실청을 담그던 기억',
+        tags: ['family'],
+      },
+    ]);
+    expect(context.legacyMemoryIds.size).toBe(0);
   });
 
   it('returns a TTS URL for text assistant responses', async () => {

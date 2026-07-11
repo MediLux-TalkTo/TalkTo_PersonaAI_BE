@@ -6,11 +6,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import {
+  AiChatMemory,
   AiChatHistoryItem,
   AiClientService,
   AiProviderConsentContext,
 } from '../ai/ai-client.service';
 import { AdminService } from '../admin/admin.service';
+import { AnalysisEmbedding } from '../analysis/analysis-embedding.entity';
+import { MemorySegment } from '../analysis/memory-segment.entity';
 import { ConsentFeature } from '../common/enums/consent.enums';
 import {
   SystemLogCategory,
@@ -21,7 +24,6 @@ import {
   MessageSenderType,
   MessageStatus,
 } from '../common/enums/message.enums';
-import { Memory } from '../memories/memory.entity';
 import { Persona } from '../personas/persona.entity';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
@@ -43,10 +45,17 @@ import { Role } from '../common/enums/role.enum';
 import { MemoryRetrievalService } from './memory-retrieval.service';
 
 const RUNTIME_LOOKUP_LIMIT = 2;
+const RUNTIME_MEMORY_LIMIT = 5;
+const LOW_CONFIDENCE_THRESHOLD = 0.18;
 
 type ResolvedConversationPersona = {
   readonly persona: Persona;
   readonly subjectId?: string;
+};
+
+type ConversationMemoryContext = {
+  readonly memories: readonly AiChatMemory[];
+  readonly legacyMemoryIds: ReadonlySet<string>;
 };
 
 @Injectable()
@@ -76,6 +85,10 @@ export class ConversationsService {
     private readonly personaBiblesRepository: Repository<PersonaBible>,
     @InjectRepository(VoiceProviderAsset)
     private readonly providerAssetsRepository: Repository<VoiceProviderAsset>,
+    @InjectRepository(MemorySegment)
+    private readonly memorySegmentsRepository?: Repository<MemorySegment>,
+    @InjectRepository(AnalysisEmbedding)
+    private readonly embeddingsRepository?: Repository<AnalysisEmbedding>,
   ) {}
 
   async createConversation(userId: string, dto: CreateConversationDto) {
@@ -146,15 +159,16 @@ export class ConversationsService {
     );
     const persona = resolvedPersona.persona;
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.memoryRetrievalService.retrieve(
+    const memoryContext = await this.retrieveConversationMemories(
       dto.content,
       memoriesConsentContext,
+      resolvedPersona.subjectId,
     );
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
       userMessage: dto.content,
-      memories: relatedMemories,
+      memories: memoryContext.memories,
       history,
       consentContext: memoriesConsentContext,
     });
@@ -200,8 +214,11 @@ export class ConversationsService {
       });
       const savedVoiceArtifact = await manager.save(voiceArtifact);
 
-      if (assistantReply.retrievedMemoryIds.length > 0) {
-        const refs = assistantReply.retrievedMemoryIds.map((memoryId) =>
+      const legacyMemoryIds = assistantReply.retrievedMemoryIds.filter((memoryId) =>
+        memoryContext.legacyMemoryIds.has(memoryId),
+      );
+      if (legacyMemoryIds.length > 0) {
+        const refs = legacyMemoryIds.map((memoryId) =>
           manager.create(MessageMemoryRef, {
             messageId: savedAssistantMessage.id,
             memoryId,
@@ -268,15 +285,16 @@ export class ConversationsService {
       memoriesConsentContext,
     );
     const history = await this.getConversationHistory(conversation.id);
-    const relatedMemories = await this.memoryRetrievalService.retrieve(
+    const memoryContext = await this.retrieveConversationMemories(
       sttText,
       memoriesConsentContext,
+      resolvedPersona.subjectId,
     );
     const assistantReply = await this.generateAssistantReply({
       conversationId,
       persona,
       userMessage: sttText,
-      memories: relatedMemories,
+      memories: memoryContext.memories,
       history,
       consentContext: memoriesConsentContext,
     });
@@ -322,8 +340,11 @@ export class ConversationsService {
         });
         const savedVoiceArtifact = await manager.save(voiceArtifact);
 
-        if (assistantReply.retrievedMemoryIds.length > 0) {
-          const refs = assistantReply.retrievedMemoryIds.map((memoryId) =>
+        const legacyMemoryIds = assistantReply.retrievedMemoryIds.filter((memoryId) =>
+          memoryContext.legacyMemoryIds.has(memoryId),
+        );
+        if (legacyMemoryIds.length > 0) {
+          const refs = legacyMemoryIds.map((memoryId) =>
             manager.create(MessageMemoryRef, {
               messageId: savedAssistantMessage.id,
               memoryId,
@@ -503,7 +524,7 @@ export class ConversationsService {
     conversationId: string;
     persona: Awaited<ReturnType<PersonasService['getActivePersona']>>;
     userMessage: string;
-    memories: Memory[];
+    memories: readonly AiChatMemory[];
     history: AiChatHistoryItem[];
     consentContext: AiProviderConsentContext;
   }) {
@@ -537,6 +558,103 @@ export class ConversationsService {
         usedFallback: true,
       };
     }
+  }
+
+  private async retrieveConversationMemories(
+    query: string,
+    consentContext: AiProviderConsentContext,
+    subjectId?: string,
+  ): Promise<ConversationMemoryContext> {
+    if (
+      subjectId &&
+      this.memorySegmentsRepository &&
+      this.embeddingsRepository
+    ) {
+      const segments = await this.retrieveRuntimeMemorySegments(
+        query,
+        consentContext,
+        subjectId,
+      );
+      return {
+        memories: segments.map((segment) => ({
+          id: segment.id,
+          title: `기억 ${segment.segmentIndex + 1}`,
+          content: segment.memoryText,
+          tags: segment.tags ?? [],
+        })),
+        legacyMemoryIds: new Set(),
+      };
+    }
+
+    const legacyMemories = await this.memoryRetrievalService.retrieve(
+      query,
+      consentContext,
+    );
+    return {
+      memories: legacyMemories.map((memory) => ({
+        id: memory.id,
+        title: memory.title,
+        content: memory.bodyMarkdown,
+        tags: memory.tags ?? [],
+      })),
+      legacyMemoryIds: new Set(legacyMemories.map((memory) => memory.id)),
+    };
+  }
+
+  private async retrieveRuntimeMemorySegments(
+    query: string,
+    consentContext: AiProviderConsentContext,
+    subjectId: string,
+  ): Promise<MemorySegment[]> {
+    const memorySegmentsRepository = this.memorySegmentsRepository;
+    const embeddingsRepository = this.embeddingsRepository;
+    if (!memorySegmentsRepository || !embeddingsRepository) {
+      return [];
+    }
+
+    let queryEmbedding: number[] | null = null;
+    if (query.trim()) {
+      try {
+        queryEmbedding = await this.aiClientService.embed(query, consentContext);
+      } catch (error) {
+        await this.adminService.recordLog({
+          category: SystemLogCategory.MEMORY,
+          severity: SystemLogSeverity.WARN,
+          detail: {
+            reason: 'runtime_memory_embedding_failed',
+            error: error instanceof Error ? error.message : 'unknown',
+          },
+        });
+      }
+    }
+
+    if (!queryEmbedding) {
+      return memorySegmentsRepository.find({
+        where: { ownerUserId: consentContext.ownerUserId, subjectId },
+        order: { updatedAt: 'DESC' },
+        take: RUNTIME_MEMORY_LIMIT,
+      });
+    }
+
+    const embeddings = await embeddingsRepository.find({
+      where: { ownerUserId: consentContext.ownerUserId, subjectId },
+      relations: ['memorySegment'],
+      take: 500,
+    });
+    return embeddings
+      .filter(
+        (embedding): embedding is AnalysisEmbedding & {
+          memorySegment: MemorySegment;
+        } => Boolean(embedding.memorySegment),
+      )
+      .map((embedding) => ({
+        score: cosineSimilarity(queryEmbedding, embedding.embedding),
+        segment: embedding.memorySegment,
+      }))
+      .filter((result) => result.score >= LOW_CONFIDENCE_THRESHOLD)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, RUNTIME_MEMORY_LIMIT)
+      .map((result) => result.segment);
   }
 
   private async extractShortTermMemory(params: {
@@ -689,4 +807,20 @@ export class ConversationsService {
     };
   }
 
+}
+
+function cosineSimilarity(left: readonly number[], right: readonly number[]): number {
+  if (left.length === 0 || left.length !== right.length) {
+    return 0;
+  }
+  let dot = 0;
+  let leftMagnitude = 0;
+  let rightMagnitude = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    dot += left[index] * right[index];
+    leftMagnitude += left[index] ** 2;
+    rightMagnitude += right[index] ** 2;
+  }
+  const denominator = Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude);
+  return denominator === 0 ? 0 : dot / denominator;
 }

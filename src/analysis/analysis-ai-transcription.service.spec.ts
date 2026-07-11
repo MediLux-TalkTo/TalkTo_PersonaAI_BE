@@ -235,7 +235,7 @@ describe('AnalysisAiTranscriptionService', () => {
         sttHints: {
           names: ['신금자', '정읍', '정으비', '매실청'],
           voiceSampleRef: {
-            documentId: 'sample-id',
+            documentId: 'recording-id',
             startMs: 12000,
             endMs: 25000,
           },
@@ -245,6 +245,7 @@ describe('AnalysisAiTranscriptionService', () => {
   });
 
   it('reissues the signed audio URL once for transient AI download failures and persists confidence', async () => {
+    samplesRepository.findOne.mockResolvedValue(null);
     audioStorageService.createPlaybackUrl
       .mockResolvedValueOnce({
         playbackUrl: 'https://storage.example/expired.m4a?X-Amz-Signature=old',
@@ -572,6 +573,7 @@ function buildSample(): TargetVoiceSample {
   return Object.assign(new TargetVoiceSample(), {
     id: 'sample-id',
     applicationId: 'application-id',
+    recordingId: 'recording-id',
     startMs: 12000,
     endMs: 25000,
   });

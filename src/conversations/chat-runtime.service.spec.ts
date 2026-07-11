@@ -15,9 +15,9 @@ describe('ChatRuntimeService', () => {
   const memory = {
     id: 'memory-1',
     title: '불고기',
-    bodyMarkdown: '불고기는 간장과 마늘을 넣고 만들던 기억',
+    content: '불고기는 간장과 마늘을 넣고 만들던 기억',
     tags: ['sensitive'],
-  } as any;
+  };
 
   it('uses local fallback when AI server is not configured', async () => {
     const service = new ChatRuntimeService({

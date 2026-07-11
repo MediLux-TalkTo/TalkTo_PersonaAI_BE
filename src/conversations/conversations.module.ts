@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminModule } from '../admin/admin.module';
 import { AiModule } from '../ai/ai.module';
+import { AnalysisEmbedding } from '../analysis/analysis-embedding.entity';
+import { MemorySegment } from '../analysis/memory-segment.entity';
 import { MemoriesModule } from '../memories/memories.module';
 import { MemoryEmbedding } from '../memories/memory-embedding.entity';
 import { Memory } from '../memories/memory.entity';
@@ -33,6 +35,8 @@ import { VoiceArtifact } from './voice-artifact.entity';
       PersonaRuntimeConfig,
       PersonaBible,
       VoiceProviderAsset,
+      MemorySegment,
+      AnalysisEmbedding,
     ]),
     AiModule,
     MemoriesModule,

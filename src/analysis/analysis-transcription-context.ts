@@ -80,7 +80,7 @@ export function mapIntakeContext(input: {
       ...(input.sample
         ? {
             voiceSampleRef: {
-              documentId: input.sample.id,
+              documentId: input.sample.recordingId ?? input.sample.id,
               ...(input.sample.startMs !== null ? { startMs: input.sample.startMs } : {}),
               ...(input.sample.endMs !== null ? { endMs: input.sample.endMs } : {}),
             },
