@@ -20,8 +20,11 @@ import {
   type PreRegistrationParticipationType as PreRegistrationParticipationTypeValue,
   type PreRegistrationReason as PreRegistrationReasonValue,
   type SurveyConcern as SurveyConcernValue,
-  type SurveyInterest as SurveyInterestValue,
+  type SurveyDesiredFeature as SurveyDesiredFeatureValue,
+  type SurveyFirstSituation as SurveyFirstSituationValue,
+  type SurveyRecordSearchExperience as SurveyRecordSearchExperienceValue,
   type SurveyRecordingAvailability as SurveyRecordingAvailabilityValue,
+  type SurveyVoiceLossRegret as SurveyVoiceLossRegretValue,
   type SurveyVoicePersonaFeeling as SurveyVoicePersonaFeelingValue,
   InterviewContactMethod,
   InterviewRecordingDuration,
@@ -29,21 +32,36 @@ import {
   PreRegistrationParticipationType,
   PreRegistrationReason,
   SurveyConcern,
-  SurveyInterest,
+  SurveyDesiredFeature,
+  SurveyFirstSituation,
+  SurveyRecordSearchExperience,
   SurveyRecordingAvailability,
+  SurveyVoiceLossRegret,
   SurveyVoicePersonaFeeling,
 } from '../pre-registration.constants';
 
 export class PreRegistrationSurveyDto {
+  @ApiProperty({ enum: Object.values(SurveyFirstSituation) })
+  @IsIn(Object.values(SurveyFirstSituation))
+  firstSituation: SurveyFirstSituationValue;
+
   @ApiProperty({ enum: Object.values(SurveyRecordingAvailability) })
   @IsIn(Object.values(SurveyRecordingAvailability))
-  hasRecording: SurveyRecordingAvailabilityValue;
+  recordingAvailability: SurveyRecordingAvailabilityValue;
 
-  @ApiProperty({ enum: Object.values(SurveyInterest), isArray: true })
+  @ApiProperty({ enum: Object.values(SurveyRecordSearchExperience) })
+  @IsIn(Object.values(SurveyRecordSearchExperience))
+  recordSearchExperience: SurveyRecordSearchExperienceValue;
+
+  @ApiProperty({ enum: Object.values(SurveyVoiceLossRegret) })
+  @IsIn(Object.values(SurveyVoiceLossRegret))
+  voiceLossRegret: SurveyVoiceLossRegretValue;
+
+  @ApiProperty({ enum: Object.values(SurveyDesiredFeature), isArray: true })
   @IsArray()
   @ArrayNotEmpty()
-  @IsIn(Object.values(SurveyInterest), { each: true })
-  interests: SurveyInterestValue[];
+  @IsIn(Object.values(SurveyDesiredFeature), { each: true })
+  desiredFeatures: SurveyDesiredFeatureValue[];
 
   @ApiProperty({ enum: Object.values(SurveyVoicePersonaFeeling) })
   @IsIn(Object.values(SurveyVoicePersonaFeeling))
@@ -55,11 +73,6 @@ export class PreRegistrationSurveyDto {
   @IsIn(Object.values(SurveyConcern), { each: true })
   concerns: SurveyConcernValue[];
 
-  @ApiPropertyOptional({ maxLength: 500 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  usageSituation?: string;
 }
 
 export class PreRegistrationInterviewDto {

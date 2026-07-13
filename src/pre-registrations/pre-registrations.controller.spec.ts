@@ -103,7 +103,34 @@ describe('PreRegistrationsController', () => {
     });
   });
 
-  it('rejects an array in place of nested survey answers', async () => {
+  it('accepts all seven required survey answers', async () => {
+    const payload = {
+      participationType: 'survey_10',
+      name: 'Hong Gil Dong',
+      contact: 'email@talkto.com',
+      reason: 'voice_persona_interest',
+      contactConsent: true,
+      contactConsentVersion: 'landing_beta_contact_v1',
+      survey: {
+        firstSituation: 'preserve_living_family_voice',
+        recordingAvailability: 'between_3_and_9',
+        recordSearchExperience: 'hard_to_find',
+        voiceLossRegret: 5,
+        desiredFeatures: ['archive_recordings', 'voice_persona'],
+        voicePersonaFeeling: 'eager',
+        concerns: ['privacy_storage'],
+      },
+    };
+
+    await request(app.getHttpServer())
+      .post('/api/v1/pre-registrations')
+      .send(payload)
+      .expect(201);
+
+    expect(preRegistrationsService.create).toHaveBeenCalledWith(payload, undefined);
+  });
+
+  it('rejects survey payloads that omit a required question', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/pre-registrations')
       .send({
@@ -113,7 +140,14 @@ describe('PreRegistrationsController', () => {
         reason: 'voice_persona_interest',
         contactConsent: true,
         contactConsentVersion: 'landing_beta_contact_v1',
-        survey: [],
+        survey: {
+          firstSituation: 'preserve_living_family_voice',
+          recordingAvailability: 'between_3_and_9',
+          recordSearchExperience: 'hard_to_find',
+          voiceLossRegret: 5,
+          desiredFeatures: ['archive_recordings'],
+          voicePersonaFeeling: 'eager',
+        },
       })
       .expect(400);
 

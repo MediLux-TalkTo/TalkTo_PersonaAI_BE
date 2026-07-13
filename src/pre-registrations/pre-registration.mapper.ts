@@ -72,11 +72,13 @@ export function normalizeContact(contact: string): NormalizedContact {
 
 export function toSurvey(dto: PreRegistrationSurveyDto): PreRegistrationSurvey {
   return {
-    hasRecording: dto.hasRecording,
-    interests: dto.interests,
+    firstSituation: dto.firstSituation,
+    recordingAvailability: dto.recordingAvailability,
+    recordSearchExperience: dto.recordSearchExperience,
+    voiceLossRegret: dto.voiceLossRegret,
+    desiredFeatures: dto.desiredFeatures,
     voicePersonaFeeling: dto.voicePersonaFeeling,
     concerns: dto.concerns,
-    usageSituation: dto.usageSituation?.trim() || null,
   };
 }
 

@@ -1854,29 +1854,36 @@ components:
         survey:
           type: object
           description: Required only for participationType survey_10.
-          required: [hasRecording, interests, voicePersonaFeeling, concerns]
+          required:
+            [firstSituation, recordingAvailability, recordSearchExperience, voiceLossRegret, desiredFeatures, voicePersonaFeeling, concerns]
           properties:
-            hasRecording:
+            firstSituation:
               type: string
-              enum: [has_recording, wants_to_collect]
-            interests:
+              enum: [preserve_living_family_voice, revisit_deceased_family_voice, lack_deceased_family_records, leave_my_voice_and_story, curious_about_service]
+            recordingAvailability:
+              type: string
+              enum: [more_than_10, between_3_and_9, between_1_and_2, likely_but_not_found, no_audio_but_other_records, none]
+            recordSearchExperience:
+              type: string
+              enum: [hard_to_find, hard_to_organize, wanted_to_relisten_but_did_not_search, never_thought_to_organize, no_inconvenience, unsure]
+            voiceLossRegret:
+              type: integer
+              enum: [1, 2, 3, 4, 5]
+            desiredFeatures:
               type: array
               minItems: 1
               items:
                 type: string
-                enum: [archive_recordings, search_and_relisten, ai_summary, voice_persona]
+                enum: [archive_recordings, organize_records, search_memories, share_with_family, voice_persona, no_special_need]
             voicePersonaFeeling:
               type: string
-              enum: [eager, curious_cautious, original_voice_only, uncomfortable]
+              enum: [eager, curious_cautious, archive_search_only, ethically_uncomfortable, scary_or_aversive, unsure]
             concerns:
               type: array
               minItems: 1
               items:
                 type: string
                 enum: [privacy_storage, different_words, emotional_distress, price]
-            usageSituation:
-              type: string
-              maxLength: 500
         interview:
           type: object
           description: Required only for participationType interview_20.

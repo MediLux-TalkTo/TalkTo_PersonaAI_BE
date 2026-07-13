@@ -61,7 +61,8 @@ describe('PreRegistrationsService', () => {
         contactType: 'email',
         contact: 'email@talkto.com',
         survey: expect.objectContaining({
-          interests: ['archive_recordings', 'voice_persona'],
+          desiredFeatures: ['archive_recordings', 'voice_persona'],
+          voiceLossRegret: 5,
         }),
         interview: null,
       }),
@@ -201,11 +202,13 @@ function buildSurveySubmission(): CreatePreRegistrationDto {
     ...buildEarlyAccessSubmission(),
     participationType: 'survey_10',
     survey: {
-      hasRecording: 'has_recording',
-      interests: ['archive_recordings', 'voice_persona'],
+      firstSituation: 'preserve_living_family_voice',
+      recordingAvailability: 'between_3_and_9',
+      recordSearchExperience: 'hard_to_find',
+      voiceLossRegret: 5,
+      desiredFeatures: ['archive_recordings', 'voice_persona'],
       voicePersonaFeeling: 'eager',
       concerns: ['privacy_storage'],
-      usageSituation: 'I want to preserve family calls.',
     },
   };
 }
