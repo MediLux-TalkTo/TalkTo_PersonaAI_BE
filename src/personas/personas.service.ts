@@ -32,6 +32,21 @@ export class PersonasService {
     return persona;
   }
 
+  /**
+   * 채팅 생성 전용 — select:false인 systemPrompt까지 명시적으로 불러온다.
+   * API 응답 경로(getActivePersona)는 systemPrompt를 노출하지 않는다.
+   */
+  async getActivePersonaForChat(): Promise<Persona> {
+    const persona = await this.personasRepository
+      .createQueryBuilder('persona')
+      .addSelect('persona.systemPrompt')
+      .where('persona.isActive = :active', { active: true })
+      .orderBy('persona.createdAt', 'ASC')
+      .getOne();
+
+    return persona ?? (await this.getActivePersona());
+  }
+
   async updatePersona(personaId: string, dto: UpdatePersonaDto): Promise<Persona> {
     const persona = await this.personasRepository.findOne({
       where: { id: personaId },

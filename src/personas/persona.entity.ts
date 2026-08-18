@@ -19,6 +19,11 @@ export class Persona {
   @Column({ type: 'text' })
   description: string;
 
+  // AI 지시(시스템 프롬프트) 전용 칸. 화면에 노출하지 않으려 기본 미선택.
+  // 값이 있으면 채팅 생성 시 description 대신 이 값을 지시로 사용한다.
+  @Column({ type: 'text', nullable: true, select: false })
+  systemPrompt?: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   profileImageUrl: string | null;
 

@@ -37,7 +37,10 @@ export class ChatRuntimeService {
       })),
       persona: {
         subjectId: params.persona.id,
-        instructions: params.persona.description,
+        // systemPrompt(전용 지시 칸)이 있으면 그것을, 없으면 description을 지시로 사용.
+        instructions: params.persona.systemPrompt?.trim()
+          ? params.persona.systemPrompt
+          : params.persona.description,
         voiceId: params.persona.voiceId,
       },
     }, params.consentContext);

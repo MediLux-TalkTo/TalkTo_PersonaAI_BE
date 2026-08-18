@@ -12,6 +12,13 @@ export class UpdatePersonaDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description: 'AI 지시(시스템 프롬프트). 화면에는 노출되지 않고 답변 생성에만 쓰인다.',
+  })
+  @IsOptional()
+  @IsString()
+  systemPrompt?: string;
+
   @ApiPropertyOptional({ example: 'https://cdn.example.com/grandma.png' })
   @IsOptional()
   @IsString()

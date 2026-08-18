@@ -253,13 +253,15 @@ describe('ConversationsService AI consent context', () => {
     const dataSource = {
       transaction: jest.fn((handler) => handler(manager)),
     };
+    const activePersona = {
+      id: 'persona-id',
+      displayName: '할머니',
+      description: '조립된 페르소나 프롬프트',
+      voiceId: 'voice-id',
+    };
     const personasService = {
-      getActivePersona: jest.fn().mockResolvedValue({
-        id: 'persona-id',
-        displayName: '할머니',
-        description: '조립된 페르소나 프롬프트',
-        voiceId: 'voice-id',
-      }),
+      getActivePersona: jest.fn().mockResolvedValue(activePersona),
+      getActivePersonaForChat: jest.fn().mockResolvedValue(activePersona),
     };
     const chatRuntimeService = {
       generateAssistantReply: jest.fn().mockResolvedValue({
@@ -341,13 +343,15 @@ describe('ConversationsService AI consent context', () => {
     const dataSource = {
       transaction: jest.fn((handler) => handler(manager)),
     };
+    const activePersona = {
+      id: 'persona-id',
+      displayName: '할머니',
+      description: '조립된 페르소나 프롬프트',
+      voiceId: 'voice-id',
+    };
     const personasService = {
-      getActivePersona: jest.fn().mockResolvedValue({
-        id: 'persona-id',
-        displayName: '할머니',
-        description: '조립된 페르소나 프롬프트',
-        voiceId: 'voice-id',
-      }),
+      getActivePersona: jest.fn().mockResolvedValue(activePersona),
+      getActivePersonaForChat: jest.fn().mockResolvedValue(activePersona),
     };
     const chatRuntimeService = {
       generateAssistantReply: jest.fn().mockResolvedValue({

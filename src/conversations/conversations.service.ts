@@ -132,7 +132,7 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const resolvedPersona = await this.resolveConversationPersona(
       conversation.userId,
-      await this.personasService.getActivePersona(),
+      await this.personasService.getActivePersonaForChat(),
     );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,
@@ -248,7 +248,7 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const resolvedPersona = await this.resolveConversationPersona(
       conversation.userId,
-      await this.personasService.getActivePersona(),
+      await this.personasService.getActivePersonaForChat(),
     );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,
@@ -674,6 +674,8 @@ export class ConversationsService {
         id: subject.id,
         displayName: subject.displayName,
         description: bible.assembledInstructions,
+        // 승인된 조립 지시를 AI 지시로 명시(폴백 시드의 systemPrompt를 물려받지 않도록).
+        systemPrompt: bible.assembledInstructions,
         voiceId: providerAsset?.externalAssetId ?? fallbackPersona.voiceId,
       }),
       subjectId: subject.id,
