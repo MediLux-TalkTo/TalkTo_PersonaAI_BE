@@ -37,14 +37,24 @@ export class PersonasService {
    * API 응답 경로(getActivePersona)는 systemPrompt를 노출하지 않는다.
    */
   async getActivePersonaForChat(): Promise<Persona> {
-    const persona = await this.personasRepository
-      .createQueryBuilder('persona')
-      .addSelect('persona.systemPrompt')
-      .where('persona.isActive = :active', { active: true })
-      .orderBy('persona.createdAt', 'ASC')
-      .getOne();
+    // systemPrompt 컬럼이 아직 없는 환경에서도 안전하게 동작하도록 방어한다.
+    // 컬럼이 있으면 systemPrompt까지 불러오고, 없어 쿼리가 실패하면 기존 경로로 폴백.
+    try {
+      const persona = await this.personasRepository
+        .createQueryBuilder('persona')
+        .addSelect('persona.systemPrompt')
+        .where('persona.isActive = :active', { active: true })
+        .orderBy('persona.createdAt', 'ASC')
+        .getOne();
 
-    return persona ?? (await this.getActivePersona());
+      if (persona) {
+        return persona;
+      }
+    } catch {
+      // systemPrompt 컬럼 부재 등으로 실패 시 아래 기본 경로로 폴백
+    }
+
+    return this.getActivePersona();
   }
 
   async updatePersona(personaId: string, dto: UpdatePersonaDto): Promise<Persona> {
