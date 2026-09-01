@@ -89,11 +89,55 @@ describe('ChatRuntimeService', () => {
         ],
         persona: {
           subjectId: 'persona-id',
-          instructions: '조립된 페르소나 프롬프트',
+          instructions: expect.stringContaining('조립된 페르소나 프롬프트'),
           voiceId: 'voice-id',
         },
       },
       consentContext,
     );
+  });
+
+  it('appends the affection mirror rule to the persona instructions', async () => {
+    const chat = jest.fn().mockResolvedValue({
+      content: '답변',
+      retrieved_memory_ids: [],
+      latency_ms: 100,
+    });
+    const service = new ChatRuntimeService({ chat } as any);
+
+    await service.generateAssistantReply({
+      persona,
+      userMessage: '엄마 사랑해',
+      memories: [],
+      history: [],
+      consentContext,
+    });
+
+    const { instructions } = chat.mock.calls[0][0].persona;
+    expect(instructions.startsWith('조립된 페르소나 프롬프트')).toBe(true);
+    expect(instructions).toContain('사랑 표현에는 반드시');
+  });
+
+  it('does not append the affection mirror rule twice', async () => {
+    const chat = jest.fn().mockResolvedValue({
+      content: '답변',
+      retrieved_memory_ids: [],
+      latency_ms: 100,
+    });
+    const service = new ChatRuntimeService({ chat } as any);
+
+    await service.generateAssistantReply({
+      persona: {
+        ...persona,
+        systemPrompt: '이미 규칙이 담긴 프롬프트. 사랑 표현에는 반드시 되받는다.',
+      } as any,
+      userMessage: '엄마 사랑해',
+      memories: [],
+      history: [],
+      consentContext,
+    });
+
+    const { instructions } = chat.mock.calls[0][0].persona;
+    expect(instructions).toBe('이미 규칙이 담긴 프롬프트. 사랑 표현에는 반드시 되받는다.');
   });
 });
