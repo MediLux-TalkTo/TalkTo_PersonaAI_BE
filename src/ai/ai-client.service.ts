@@ -148,16 +148,11 @@ export class AiClientService {
     }
     await this.assertProviderConsents(consentContext, ConsentFeature.MEMORIES);
 
+    // 기억을 찾는 질문에는 job 도 segment id 도 없다. /v1/embeddings 는 그 둘을
+    // UUID 로 요구해서 'query' 같은 자리표시자를 넣으면 422 로 튕긴다.
     const response = await this.postJson<AiEmbedResponse | AiEmbeddingResponse>(
-      '/v1/embeddings',
-      this.prepareProviderPayload(
-        'embedding',
-        {
-          jobId: 'query',
-          items: [{ memorySegmentId: 'query', embeddingIndex: 0, text }],
-        },
-        true,
-      ),
+      '/v1/embeddings/query',
+      this.prepareProviderPayload('embedding', { text }, true),
     );
 
     const embedding = this.firstEmbedding(response);

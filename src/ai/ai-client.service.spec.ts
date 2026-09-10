@@ -429,6 +429,36 @@ describe('AiClientService', () => {
     ).rejects.toBeInstanceOf(AiServerHttpError);
   });
 
+  it('질문 임베딩은 text 만 실어 /v1/embeddings/query 로 보낸다', async () => {
+    // 기억 벡터화용 /v1/embeddings 는 jobId 와 memorySegmentId 를 UUID 로 요구한다.
+    // 거기에 'query' 를 넣어 보내다가 422 로 튕겨 기억 검색이 통째로 죽었었다.
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ embedding: [0.1, 0.2] }),
+    });
+
+    const service = new AiClientService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVER_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService, consentsService);
+
+    await expect(
+      service.embed('할머니 이야기', {
+        ownerUserId: 'user-id',
+        feature: ConsentFeature.MEMORIES,
+        bypassConsentCheck: true,
+      }),
+    ).resolves.toEqual([0.1, 0.2]);
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(String(url)).toContain('/v1/embeddings/query');
+    const sent = JSON.parse(String(init.body));
+    expect(sent.text).toBe('할머니 이야기');
+    expect(sent.jobId).toBeUndefined();
+  });
+
   it('blocks configured provider calls when consent context is missing', async () => {
     global.fetch = jest.fn();
 
