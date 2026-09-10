@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Repository } from 'typeorm';
 import { AdminService } from '../admin/admin.service';
 import {
   AiClientService,
@@ -30,10 +30,11 @@ export class MemoryRetrievalService {
     consentContext: AiProviderConsentContext,
   ): Promise<Memory[]> {
     const trimmed = query.trim();
+    const subjectId = consentContext.subjectId;
 
     if (!trimmed) {
       return this.memoriesRepository.find({
-        where: { status: MemoryStatus.ACTIVE },
+        where: this.subjectScope(subjectId),
         take: 3,
         order: { updatedAt: 'DESC' },
       });
@@ -45,14 +46,37 @@ export class MemoryRetrievalService {
       return vectorMatches;
     }
 
-    return this.retrieveByKeyword(trimmed);
+    return this.retrieveByKeyword(trimmed, subjectId);
   }
 
-  private async retrieveByKeyword(query: string): Promise<Memory[]> {
+  /**
+   * 대상자별로 기억을 가른다. subjectId 가 없는 행은 대상자 구분이 생기기 전에
+   * 들어온 것이라 당분간 함께 본다. 운영 데이터를 채우고 나면 IS NULL 절을 뺀다.
+   */
+  private subjectScope(
+    subjectId: string | undefined,
+    extra: Record<string, unknown> = {},
+  ): Record<string, unknown>[] {
+    const base = { status: MemoryStatus.ACTIVE, ...extra };
+
+    if (!subjectId) {
+      return [base];
+    }
+
+    return [
+      { ...base, subjectId },
+      { ...base, subjectId: IsNull() },
+    ];
+  }
+
+  private async retrieveByKeyword(
+    query: string,
+    subjectId?: string,
+  ): Promise<Memory[]> {
     return this.memoriesRepository.find({
       where: [
-        { status: MemoryStatus.ACTIVE, title: ILike(`%${query}%`) },
-        { status: MemoryStatus.ACTIVE, bodyMarkdown: ILike(`%${query}%`) },
+        ...this.subjectScope(subjectId, { title: ILike(`%${query}%`) }),
+        ...this.subjectScope(subjectId, { bodyMarkdown: ILike(`%${query}%`) }),
       ],
       take: 3,
       order: { updatedAt: 'DESC' },
@@ -82,16 +106,22 @@ export class MemoryRetrievalService {
       return [];
     }
 
-    const pgvectorMatches = await this.retrieveByPgvector(queryEmbedding);
+    const pgvectorMatches = await this.retrieveByPgvector(
+      queryEmbedding,
+      consentContext.subjectId,
+    );
 
     if (pgvectorMatches.length > 0) {
       return pgvectorMatches;
     }
 
-    return this.retrieveByApplicationCosine(queryEmbedding);
+    return this.retrieveByApplicationCosine(queryEmbedding, consentContext.subjectId);
   }
 
-  private async retrieveByPgvector(queryEmbedding: number[]): Promise<Memory[]> {
+  private async retrieveByPgvector(
+    queryEmbedding: number[],
+    subjectId?: string,
+  ): Promise<Memory[]> {
     const vectorLiteral = this.toVectorLiteral(queryEmbedding);
 
     if (!vectorLiteral) {
@@ -113,6 +143,7 @@ export class MemoryRetrievalService {
             INNER JOIN "memories" m ON m."id" = me."memoryId"
             WHERE m."status" = $2
               AND me."embeddingVector" IS NOT NULL
+              AND ($3::uuid IS NULL OR m."subjectId" = $3::uuid OR m."subjectId" IS NULL)
           )
           SELECT *
           FROM ranked_memories
@@ -120,7 +151,7 @@ export class MemoryRetrievalService {
           ORDER BY distance ASC
           LIMIT 3
         `,
-        [vectorLiteral, MemoryStatus.ACTIVE],
+        [vectorLiteral, MemoryStatus.ACTIVE, subjectId ?? null],
       );
 
       return rows.map((row: Record<string, unknown>) =>
@@ -140,13 +171,12 @@ export class MemoryRetrievalService {
     }
   }
 
-  private async retrieveByApplicationCosine(queryEmbedding: number[]): Promise<Memory[]> {
+  private async retrieveByApplicationCosine(
+    queryEmbedding: number[],
+    subjectId?: string,
+  ): Promise<Memory[]> {
     const embeddings = await this.memoryEmbeddingsRepository.find({
-      where: {
-        memory: {
-          status: MemoryStatus.ACTIVE,
-        },
-      },
+      where: this.subjectScope(subjectId).map((memory) => ({ memory })),
       relations: ['memory'],
     });
     const scores = new Map<string, { memory: Memory; score: number }>();

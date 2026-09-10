@@ -1,5 +1,6 @@
 import {
   Column,
+  Index,
   CreateDateColumn,
   Entity,
   OneToMany,
@@ -15,6 +16,11 @@ import { MemoryRevision } from './memory-revision.entity';
 export class Memory {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  // 대상자별로 기억을 가른다. 없으면 다른 대상자 기억이 검색에 섞인다.
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  subjectId: string | null;
 
   @Column({ length: 120 })
   title: string;

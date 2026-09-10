@@ -83,7 +83,7 @@ describe('MemoryRetrievalService', () => {
     expect(aiClientService.embed).toHaveBeenCalledWith('불고기', consentContext);
     expect(memoryEmbeddingsRepository.query).toHaveBeenCalledWith(
       expect.stringContaining('"embeddingVector" <=> $1::vector'),
-      ['[1,0]', MemoryStatus.ACTIVE],
+      ['[1,0]', MemoryStatus.ACTIVE, null],
     );
     expect(memoryEmbeddingsRepository.find).not.toHaveBeenCalled();
   });
