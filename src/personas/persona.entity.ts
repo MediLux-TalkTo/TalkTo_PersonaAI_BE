@@ -13,6 +13,12 @@ export class Persona {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  // 어느 대상자의 페르소나인지. 기억 검색을 대상자별로 가르는 데 쓴다.
+  // 앱 경로는 런타임 설정에서 대상자가 정해지고, 데모처럼 폴백으로 도는
+  // 페르소나는 이 값으로 대상자를 안다.
+  @Column({ type: 'uuid', nullable: true })
+  subjectId: string | null;
+
   @Column({ length: 100 })
   displayName: string;
 

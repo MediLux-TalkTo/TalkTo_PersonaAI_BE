@@ -623,6 +623,13 @@ export class ConversationsService {
     };
   }
 
+  /** 런타임 설정이 없을 때. 페르소나에 달린 대상자를 그대로 쓴다. */
+  private fallbackResolution(persona: Persona): ResolvedConversationPersona {
+    return persona.subjectId
+      ? { persona, subjectId: persona.subjectId }
+      : { persona };
+  }
+
   private async resolveConversationPersona(
     ownerUserId: string,
     fallbackPersona: Persona,
@@ -633,7 +640,7 @@ export class ConversationsService {
       take: RUNTIME_LOOKUP_LIMIT,
     });
     if (runtimeConfigs.length !== 1) {
-      return { persona: fallbackPersona };
+      return this.fallbackResolution(fallbackPersona);
     }
 
     const runtimeConfig = runtimeConfigs[0];
@@ -649,7 +656,7 @@ export class ConversationsService {
       })
       .getOne();
     if (!bible?.assembledInstructions) {
-      return { persona: fallbackPersona };
+      return this.fallbackResolution(fallbackPersona);
     }
 
     const subject = await this.subjectsRepository.findOne({
@@ -659,7 +666,7 @@ export class ConversationsService {
       },
     });
     if (!subject) {
-      return { persona: fallbackPersona };
+      return this.fallbackResolution(fallbackPersona);
     }
 
     const providerAsset = await this.providerAssetsRepository.findOne({
