@@ -300,7 +300,7 @@ export class AnalysisAiTranscriptionService {
           {
             memorySegmentId: embedding.memorySegmentId,
             embeddingIndex: index,
-            provider: response.provider ?? 'persona-ai-ai',
+            provider: response.provider ?? 'talkto-personaai-ai',
             model: response.model ?? 'text-embedding-3-small',
             dimensions: embedding.embedding.length,
             embedding: [...embedding.embedding],

@@ -244,7 +244,7 @@ describe('AiClientService', () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
-        provider: 'persona-ai-ai',
+        provider: 'talkto-personaai-ai',
         model: 'stt-v1',
         segments: [
           {

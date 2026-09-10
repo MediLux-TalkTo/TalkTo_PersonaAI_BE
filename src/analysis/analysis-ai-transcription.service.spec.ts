@@ -240,7 +240,7 @@ describe('AnalysisAiTranscriptionService', () => {
     aiClientService.requestAnalysisTranscription
       .mockRejectedValueOnce(new AiServerHttpError(422, 'AUDIO_URL_EXPIRED', {}))
       .mockResolvedValueOnce({
-        provider: 'persona-ai-ai',
+        provider: 'talkto-personaai-ai',
         model: 'stt-v1',
         segments: [
           {
@@ -287,7 +287,7 @@ describe('AnalysisAiTranscriptionService', () => {
       downloadAllowed: false,
     });
     aiClientService.requestAnalysisTranscription.mockResolvedValue({
-      provider: 'persona-ai-ai',
+      provider: 'talkto-personaai-ai',
       model: 'stt-v1',
       subjectSpeakerLabel: 'SPK_0',
       segments: [
