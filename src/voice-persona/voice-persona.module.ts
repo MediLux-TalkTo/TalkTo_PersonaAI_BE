@@ -5,6 +5,7 @@ import { TranscriptSegment } from '../analysis/transcript-segment.entity';
 import { ConsentsModule } from '../consents/consents.module';
 import { EventsModule } from '../events/events.module';
 import { Entitlement } from '../payments/entitlement.entity';
+import { Persona } from '../personas/persona.entity';
 import { Recording } from '../recordings/recording.entity';
 import { StorageModule } from '../storage/storage.module';
 import { Subject } from '../subjects/subject.entity';
@@ -38,6 +39,7 @@ import { VoicePersonaService } from './voice-persona.service';
       PersonaFamilyReview,
       PersonaRuntimeConfig,
       Entitlement,
+      Persona,
       Subject,
       TranscriptSegment,
       Recording,

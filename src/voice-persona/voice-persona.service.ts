@@ -19,6 +19,7 @@ import { ConsentFeature } from '../common/enums/consent.enums';
 import { ConsentsService } from '../consents/consents.service';
 import { AppEventsService } from '../events/events.service';
 import { Entitlement } from '../payments/entitlement.entity';
+import { Persona } from '../personas/persona.entity';
 import { EntitlementStatus } from '../payments/payment-event.constants';
 import { ProductFeature } from '../products/product.constants';
 import { Recording } from '../recordings/recording.entity';
@@ -83,6 +84,8 @@ export class VoicePersonaService {
     private readonly runtimeConfigsRepository: Repository<PersonaRuntimeConfig>,
     @InjectRepository(Entitlement)
     private readonly entitlementsRepository: Repository<Entitlement>,
+    @InjectRepository(Persona)
+    private readonly personasRepository: Repository<Persona>,
     @InjectRepository(Subject)
     private readonly subjectsRepository: Repository<Subject>,
     @InjectRepository(TranscriptSegment)
@@ -431,6 +434,13 @@ export class VoicePersonaService {
         reviewerUserId: actorUserId,
         notes: 'auto-cloned from approved target voice sample',
       }),
+    );
+
+    // 채팅은 persona.voiceId 를 실어 보낸다. 여기서 옮기지 않으면 클론을
+    // 만들어도 기본값이 나가 엉뚱한 목소리로 합성된다.
+    await this.personasRepository.update(
+      { subjectId: application.subjectId },
+      { voiceId: clone.voiceId },
     );
   }
 

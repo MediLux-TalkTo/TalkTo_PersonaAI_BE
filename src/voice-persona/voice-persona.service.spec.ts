@@ -30,6 +30,7 @@ describe('VoicePersonaService', () => {
   const entitlementsRepository = {
     find: jest.fn(),
   };
+  const personasRepository = { ...repoMock(), update: jest.fn() };
   const subjectsService = {
     getOwned: jest.fn(),
   };
@@ -110,6 +111,7 @@ describe('VoicePersonaService', () => {
       familyReviewsRepository as never,
       runtimeConfigsRepository as never,
       entitlementsRepository as never,
+      personasRepository as never,
       subjectsRepository as never,
       transcriptSegmentsRepository as never,
       recordingsRepository as never,

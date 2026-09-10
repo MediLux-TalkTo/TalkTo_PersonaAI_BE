@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, IsNull, Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { AdminService } from '../admin/admin.service';
 import {
   AiClientService,
@@ -50,8 +50,8 @@ export class MemoryRetrievalService {
   }
 
   /**
-   * 대상자별로 기억을 가른다. subjectId 가 없는 행은 대상자 구분이 생기기 전에
-   * 들어온 것이라 당분간 함께 본다. 운영 데이터를 채우고 나면 IS NULL 절을 뺀다.
+   * 대상자별로 기억을 가른다. 대상자를 알 수 없는 호출(대상자가 안 붙은
+   * 페르소나)만 전체를 본다.
    */
   private subjectScope(
     subjectId: string | undefined,
@@ -59,14 +59,7 @@ export class MemoryRetrievalService {
   ): Record<string, unknown>[] {
     const base = { status: MemoryStatus.ACTIVE, ...extra };
 
-    if (!subjectId) {
-      return [base];
-    }
-
-    return [
-      { ...base, subjectId },
-      { ...base, subjectId: IsNull() },
-    ];
+    return subjectId ? [{ ...base, subjectId }] : [base];
   }
 
   private async retrieveByKeyword(
@@ -143,7 +136,7 @@ export class MemoryRetrievalService {
             INNER JOIN "memories" m ON m."id" = me."memoryId"
             WHERE m."status" = $2
               AND me."embeddingVector" IS NOT NULL
-              AND ($3::uuid IS NULL OR m."subjectId" = $3::uuid OR m."subjectId" IS NULL)
+              AND ($3::uuid IS NULL OR m."subjectId" = $3::uuid)
           )
           SELECT *
           FROM ranked_memories
