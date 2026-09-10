@@ -282,6 +282,7 @@ describe('ConversationsService AI consent context', () => {
     const personasService = {
       getActivePersona: jest.fn().mockResolvedValue(activePersona),
       getActivePersonaForChat: jest.fn().mockResolvedValue(activePersona),
+      getPersonaForChat: jest.fn().mockResolvedValue(activePersona),
     };
     const chatRuntimeService = {
       generateAssistantReply: jest.fn().mockResolvedValue({
@@ -314,6 +315,7 @@ describe('ConversationsService AI consent context', () => {
         findOne: jest.fn().mockResolvedValue({
           id: 'conversation-id',
           userId: ownerUserId,
+          personaId: 'persona-id',
           lastMessageAt: null,
         }),
       } as unknown as Repository<Conversation>,
@@ -346,6 +348,9 @@ describe('ConversationsService AI consent context', () => {
         messageId: 'assistant-message-id',
       }),
     );
+    // 대상자가 여럿이면 대화가 물고 있는 페르소나를 써야 한다.
+    // 활성 페르소나 하나를 집어 쓰면 늘 먼저 만든 쪽이 답한다.
+    expect(personasService.getPersonaForChat).toHaveBeenCalledWith('persona-id');
   });
 
   it('returns a non-fallback assistant response for voice messages when AI succeeds', async () => {
@@ -372,6 +377,7 @@ describe('ConversationsService AI consent context', () => {
     const personasService = {
       getActivePersona: jest.fn().mockResolvedValue(activePersona),
       getActivePersonaForChat: jest.fn().mockResolvedValue(activePersona),
+      getPersonaForChat: jest.fn().mockResolvedValue(activePersona),
     };
     const chatRuntimeService = {
       generateAssistantReply: jest.fn().mockResolvedValue({
@@ -405,6 +411,7 @@ describe('ConversationsService AI consent context', () => {
         findOne: jest.fn().mockResolvedValue({
           id: 'conversation-id',
           userId: ownerUserId,
+          personaId: 'persona-id',
           lastMessageAt: null,
         }),
       } as unknown as Repository<Conversation>,

@@ -132,7 +132,7 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const resolvedPersona = await this.resolveConversationPersona(
       conversation.userId,
-      await this.personasService.getActivePersonaForChat(),
+      await this.personasService.getPersonaForChat(conversation.personaId),
     );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,
@@ -249,7 +249,7 @@ export class ConversationsService {
     const conversation = await this.assertConversationOwnership(conversationId, actor);
     const resolvedPersona = await this.resolveConversationPersona(
       conversation.userId,
-      await this.personasService.getActivePersonaForChat(),
+      await this.personasService.getPersonaForChat(conversation.personaId),
     );
     const memoriesConsentContext = this.buildProviderConsentContext(
       conversation.userId,

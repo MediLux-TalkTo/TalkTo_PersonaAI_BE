@@ -33,6 +33,33 @@ export class PersonasService {
   }
 
   /**
+   * 대화가 물고 있는 페르소나를 systemPrompt까지 붙여 가져온다.
+   *
+   * 대상자가 신금자 하나뿐일 때는 활성 페르소나 하나를 집어 쓰는 것으로 충분했지만,
+   * 페르소나가 둘 이상이면 대화를 어떤 페르소나로 만들었는지가 무시된다.
+   * 못 찾으면 예전처럼 활성 페르소나로 떨어진다.
+   */
+  async getPersonaForChat(personaId: string | null): Promise<Persona> {
+    if (personaId) {
+      try {
+        const persona = await this.personasRepository
+          .createQueryBuilder('persona')
+          .addSelect('persona.systemPrompt')
+          .where('persona.id = :personaId', { personaId })
+          .andWhere('persona.isActive = :active', { active: true })
+          .getOne();
+
+        if (persona) {
+          return persona;
+        }
+      } catch {
+        // systemPrompt 컬럼 부재 등으로 실패 시 아래 활성 페르소나로 폴백
+      }
+    }
+    return this.getActivePersonaForChat();
+  }
+
+  /**
    * 채팅 생성 전용 — select:false인 systemPrompt까지 명시적으로 불러온다.
    * API 응답 경로(getActivePersona)는 systemPrompt를 노출하지 않는다.
    */
