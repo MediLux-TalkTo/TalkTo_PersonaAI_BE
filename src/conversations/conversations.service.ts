@@ -22,7 +22,7 @@ import {
   MessageStatus,
 } from '../common/enums/message.enums';
 import { Memory } from '../memories/memory.entity';
-import { Persona } from '../personas/persona.entity';
+import { Persona, VoiceSettings } from '../personas/persona.entity';
 import { MemoriesService } from '../memories/memories.service';
 import { PersonasService } from '../personas/personas.service';
 import { AudioStorageService } from '../storage/audio-storage.service';
@@ -187,6 +187,7 @@ export class ConversationsService {
         messageId: savedAssistantMessage.id,
         text: assistantReply.content,
         voiceId: persona.voiceId,
+        voiceSettings: persona.voiceSettings ?? null,
         consentContext: voicePersonaConsentContext,
       });
       const voiceArtifact = manager.create(VoiceArtifact, {
@@ -309,6 +310,7 @@ export class ConversationsService {
           messageId: savedAssistantMessage.id,
           text: assistantReply.content,
           voiceId: persona.voiceId,
+          voiceSettings: persona.voiceSettings ?? null,
           consentContext: voicePersonaConsentContext,
         });
         const voiceArtifact = manager.create(VoiceArtifact, {
@@ -377,6 +379,7 @@ export class ConversationsService {
     messageId: string;
     text: string;
     voiceId: string | null;
+    voiceSettings: VoiceSettings | null;
     consentContext: AiProviderConsentContext;
   }): Promise<{
     ttsAudioUrl: string | null;
@@ -386,7 +389,7 @@ export class ConversationsService {
     try {
       const audioBuffer = await this.aiClientService.synthesizeSpeech(
         params.text,
-        { voiceId: params.voiceId },
+        { voiceId: params.voiceId, ...(params.voiceSettings ?? {}) },
         params.consentContext,
       );
 

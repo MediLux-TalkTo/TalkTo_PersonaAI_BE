@@ -87,6 +87,25 @@ describe('ConversationsService AI consent context', () => {
     );
   });
 
+  it('페르소나에 담긴 목소리 결을 TTS 요청에 실어 보낸다', async () => {
+    const { aiClientService, service } = createService();
+
+    await service['generateAndStoreTtsAudio']({
+      conversationId: 'conversation-id',
+      messageId: 'message-id',
+      text: '안녕하세요',
+      voiceId: 'voice-id',
+      voiceSettings: { speed: 0.7, stability: 0.5 },
+      consentContext: voicePersonaConsentContext,
+    });
+
+    expect(aiClientService.synthesizeSpeech).toHaveBeenCalledWith(
+      '안녕하세요',
+      { voiceId: 'voice-id', speed: 0.7, stability: 0.5 },
+      voicePersonaConsentContext,
+    );
+  });
+
   it('passes owner Voice Persona context to TTS provider calls', async () => {
     const { aiClientService, service } = createService();
 
@@ -95,6 +114,7 @@ describe('ConversationsService AI consent context', () => {
       messageId: 'message-id',
       text: 'kim@example.com',
       voiceId: 'voice-id',
+      voiceSettings: null,
       consentContext: voicePersonaConsentContext,
     });
 

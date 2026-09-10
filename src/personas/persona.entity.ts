@@ -8,6 +8,13 @@ import {
 } from 'typeorm';
 import { Conversation } from '../conversations/conversation.entity';
 
+export interface VoiceSettings {
+  speed?: number;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+}
+
 @Entity('personas')
 export class Persona {
   @PrimaryGeneratedColumn('uuid')
@@ -35,6 +42,13 @@ export class Persona {
 
   @Column({ default: 'default-voice' })
   voiceId: string;
+
+  /**
+   * 목소리 결. 사람마다 다르다. 비어 있으면 AI 서버 기본값을 쓴다.
+   * { speed, stability, similarityBoost, style } — 넣은 값만 넘어간다.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  voiceSettings: VoiceSettings | null;
 
   @Column({ default: 'default-model' })
   modelId: string;

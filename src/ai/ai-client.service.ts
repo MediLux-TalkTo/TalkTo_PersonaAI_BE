@@ -92,6 +92,9 @@ interface AiEmbedResponse {
 type TtsRequestOptions = {
   readonly voiceId?: string | null;
   readonly speed?: number;
+  readonly stability?: number;
+  readonly similarityBoost?: number;
+  readonly style?: number;
 };
 
 @Injectable()
@@ -303,6 +306,13 @@ export class AiClientService {
           text,
           ...(options?.voiceId ? { voiceId: options.voiceId } : {}),
           ...(options?.speed !== undefined ? { speed: options.speed } : {}),
+          ...(options?.stability !== undefined
+            ? { stability: options.stability }
+            : {}),
+          ...(options?.similarityBoost !== undefined
+            ? { similarityBoost: options.similarityBoost }
+            : {}),
+          ...(options?.style !== undefined ? { style: options.style } : {}),
         },
         true,
       ),
